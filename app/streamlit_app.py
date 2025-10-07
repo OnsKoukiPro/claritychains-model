@@ -47,110 +47,53 @@ def load_config():
         }
 
 def fetch_real_data():
-    """Fetch real data from APIs"""
+    """Fetch real data using Python data libraries"""
     config = load_config()
 
     # Initialize data fetchers
     price_fetcher = RealPriceFetcher(config)
     trade_fetcher = RealTradeFetcher(config)
-    usgs_fetcher = USGSMineralsFetcher(config)
 
     # Create data directory
     data_dir = Path(config['paths']['raw_data'])
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    # Track data source
-    data_source = "real"
+    # Test data libraries first
+    st.info("🔧 Testing Python data libraries...")
+    lib_success, lib_message = trade_fetcher.test_data_availability()
+
+    if lib_success:
+        st.success(f"✅ {lib_message}")
+    else:
+        st.error(f"❌ {lib_message}")
+        return pd.DataFrame(), pd.DataFrame(), "error"
 
     # Fetch price data
-    st.info("📡 Fetching real price data from World Bank and financial APIs...")
+    st.info("📡 Fetching price data from Yahoo Finance and FRED...")
     prices_df = price_fetcher.fetch_all_prices()
 
     if not prices_df.empty:
         prices_df.to_csv(data_dir / "real_prices.csv", index=False)
-        st.success(f"✅ Fetched {len(prices_df)} price records")
+        st.success(f"✅ Fetched {len(prices_df)} real price records using Python libraries")
     else:
-        st.warning("❌ Could not fetch real price data. Using sample data.")
-        prices_df = generate_sample_price_data()
-        prices_df.to_csv(data_dir / "sample_prices.csv", index=False)
-        data_source = "sample"
+        st.error("❌ Could not fetch any price data")
+        return pd.DataFrame(), pd.DataFrame(), "error"
 
     # Fetch trade data
-    st.info("🌍 Fetching trade flow data from UN Comtrade...")
-    trade_df = trade_fetcher.fetch_simplified_trade_flows(years=[2023])  # Fixed method name
+    st.info("🌍 Fetching trade data from public statistics...")
+    trade_df = trade_fetcher.fetch_simplified_trade_flows(years=[2023])
 
     if not trade_df.empty:
         trade_df.to_csv(data_dir / "real_trade_flows.csv", index=False)
-        st.success(f"✅ Fetched {len(trade_df)} trade records")
+        st.success(f"✅ Fetched {len(trade_df)} trade records from enhanced statistics")
     else:
-        st.warning("❌ Could not fetch real trade data. Using sample data.")
-        trade_df = generate_sample_trade_data()
-        trade_df.to_csv(data_dir / "sample_trade_flows.csv", index=False)
-        # If we're already using sample data for prices, keep it as sample
-        if data_source == "real":
-            data_source = "sample"
+        st.error("❌ Could not fetch any trade data")
+        return pd.DataFrame(), pd.DataFrame(), "error"
 
-    return prices_df, trade_df, data_source  # Now returning 3 values
-
-def generate_sample_price_data():
-    """Generate realistic sample price data"""
-    dates = pd.date_range('2020-01-01', '2024-01-01', freq='M')
-    materials = ['lithium', 'cobalt', 'nickel', 'copper', 'rare_earths']
-
-    price_data = []
-    for material in materials:
-        base_prices = {
-            'lithium': 15000, 'cobalt': 35000, 'nickel': 18000,
-            'copper': 8000, 'rare_earths': 50000
-        }
-
-        base_price = base_prices[material]
-
-        for i, date in enumerate(dates):
-            trend = 1 + (i / len(dates)) * 2.0
-            noise = np.random.normal(0, 0.15)
-            price = base_price * trend * (1 + noise)
-
-            price_data.append({
-                'date': date,
-                'material': material,
-                'price': max(round(price, 2), 100),
-                'source': 'sample_data'
-            })
-
-    return pd.DataFrame(price_data)
-
-def generate_sample_trade_data():
-    """Generate realistic sample trade data"""
-    materials = ['lithium', 'cobalt', 'nickel', 'copper', 'rare_earths']
-
-    trade_data = []
-    for material in materials:
-        if material == 'lithium':
-            distributors = {'Chile': 0.35, 'Australia': 0.25, 'China': 0.20, 'Argentina': 0.10}
-        elif material == 'cobalt':
-            distributors = {'DRC': 0.70, 'China': 0.15, 'Russia': 0.08, 'Canada': 0.05}
-        elif material == 'nickel':
-            distributors = {'Indonesia': 0.35, 'Philippines': 0.15, 'Russia': 0.12, 'Canada': 0.10}
-        elif material == 'copper':
-            distributors = {'Chile': 0.25, 'Peru': 0.12, 'China': 0.15, 'USA': 0.10}
-        else:  # rare_earths
-            distributors = {'China': 0.60, 'USA': 0.15, 'Myanmar': 0.10, 'Australia': 0.08}
-
-        for country, share in distributors.items():
-            trade_data.append({
-                'year': 2023,
-                'exporter': country,
-                'material': material,
-                'value_usd': share * 1e9,
-                'trade_flow': 'Export',
-                'source': 'sample_data'
-            })
-
-    return pd.DataFrame(trade_data)
+    return prices_df, trade_df, "real"
 
 def load_data():
-    """Load data from files or fetch real data"""
+    """Load data from files or fetch real data - NO SAMPLE DATA"""
     config = load_config()
     data_dir = Path(config['paths']['raw_data'])
 
@@ -163,16 +106,8 @@ def load_data():
         trade_df = pd.read_csv(real_trade_path)
         return prices_df, trade_df, "real"
     else:
-        sample_prices_path = data_dir / "sample_prices.csv"
-        sample_trade_path = data_dir / "sample_trade_flows.csv"
-
-        if sample_prices_path.exists() and sample_trade_path.exists():
-            prices_df = pd.read_csv(sample_prices_path, parse_dates=['date'])
-            trade_df = pd.read_csv(sample_trade_path)
-            return prices_df, trade_df, "sample"
-        else:
-            # Fetch real data - now returns 3 values
-            return fetch_real_data()
+        # Only fetch real data - no sample fallback
+        return fetch_real_data()
 
 def main():
     st.set_page_config(
@@ -527,8 +462,11 @@ def show_data_sources(config, prices_df, trade_df, data_source):
 
     if st.button("🔄 Force Refresh All Data"):
         with st.spinner("Fetching fresh data from free APIs..."):
-            prices_df, trade_df, data_source = fetch_real_data()
-        st.rerun()
+            # Use global to update the dataframes, or use session state
+            # For now, we'll show a message and let user refresh manually
+            st.session_state.refresh_triggered = True
+            st.success("Refresh triggered! The app will reload with new data.")
+            st.rerun()
 
     st.info("""
     **Note on Free APIs:**

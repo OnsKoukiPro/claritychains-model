@@ -21,3 +21,8 @@ scikit-learn==1.2.2
 # - beautifulsoup4 & lxml (not needed yet)
 # - cachetools (not essential)
 # - comtrade packages (all problematic)
+
+pandas-datareader>=0.10.0
+yfinance>=0.2.18
+pandas>=1.5.0
+numpy>=1.21.0
