@@ -1,0 +1,61 @@
+# Critical Materials AI Platform - Free API Configuration
+
+paths:
+  data_dir: "./data"
+  raw_data: "./data/raw"
+  processed_data: "./data/processed"
+  cache_dir: "./cache"
+
+api:
+  world_bank:
+    base_url: "https://api.worldbank.org/v2"
+    free: true
+
+  comtrade:
+    base_url: "https://comtrade.un.org/api/get"
+    free: true
+    rate_limit_seconds: 2
+
+  yahoo_finance:
+    free: true
+
+data_sources:
+  prices:
+    primary: "world_bank"
+    fallback: "yahoo_finance"
+
+  trade_flows:
+    primary: "comtrade_free"
+
+  supply_data:
+    primary: "usgs"
+
+materials:
+  lithium:
+    commodity_codes: ["283691"]  # Lithium carbonate
+    comtrade_codes: ["280519"]
+    world_bank_code: "PALLFNFMINDEX"  # Using palladium as proxy
+
+  cobalt:
+    commodity_codes: ["2605", "8105"]
+    comtrade_codes: ["810520"]
+    world_bank_code: "PCOCobalt"
+
+  nickel:
+    commodity_codes: ["7501", "7502"]
+    comtrade_codes: ["750220", "750210"]
+    world_bank_code: "PNICKEL"
+
+  copper:
+    commodity_codes: ["7403"]
+    comtrade_codes: ["740311", "740313"]
+    world_bank_code: "PCOPPER"
+
+  rare_earths:
+    commodity_codes: ["2805"]
+    comtrade_codes: ["280530"]
+    world_bank_code: "PREARTH"
+
+cache:
+  enabled: true
+  ttl_minutes: 1440

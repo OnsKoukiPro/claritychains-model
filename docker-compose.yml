@@ -1,0 +1,63 @@
+
+services:
+  critical-materials-app:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./cache:/app/cache
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+      - PYTHONPATH=/app/src
+      - DATA_DIR=/app/data
+      - CONFIG_DIR=/app/config
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Data pipeline service (optional - for scheduled data updates)
+  data-pipeline:
+    build:
+      context: .
+      dockerfile: ./Dockerfile.data-pipeline
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+    environment:
+      - PYTHONPATH=/app/src
+    env_file:
+      - .env
+    command: ["python", "scripts/fetch_all_data.py"]
+    restart: "no"
+
+  # Jupyter notebook service for analysis
+  jupyter:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./notebooks:/app/notebooks
+      - ./data:/app/data
+      - ./src:/app/src
+    environment:
+      - JUPYTER_PORT=8888
+    command: ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--NotebookApp.token=''"]
+    restart: unless-stopped
+
+volumes:
+  data_volume:
+  logs_volume:
