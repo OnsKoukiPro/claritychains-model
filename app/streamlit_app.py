@@ -47,7 +47,7 @@ def load_config():
         }
 
 def fetch_real_data():
-    """Fetch real data using Python data libraries"""
+    """Fetch real data using reliable Python libraries"""
     config = load_config()
 
     # Initialize data fetchers
@@ -66,28 +66,30 @@ def fetch_real_data():
         st.success(f"✅ {lib_message}")
     else:
         st.error(f"❌ {lib_message}")
-        return pd.DataFrame(), pd.DataFrame(), "error"
+        st.info("Using statistical data sources instead...")
 
     # Fetch price data
-    st.info("📡 Fetching price data from Yahoo Finance and FRED...")
+    st.info("📡 Fetching price data from FRED and market analysis...")
     prices_df = price_fetcher.fetch_all_prices()
 
     if not prices_df.empty:
         prices_df.to_csv(data_dir / "real_prices.csv", index=False)
-        st.success(f"✅ Fetched {len(prices_df)} real price records using Python libraries")
+        source_info = ", ".join(prices_df['source'].unique())
+        st.success(f"✅ Loaded {len(prices_df)} price records from: {source_info}")
     else:
-        st.error("❌ Could not fetch any price data")
+        st.error("❌ Could not load any price data")
         return pd.DataFrame(), pd.DataFrame(), "error"
 
     # Fetch trade data
-    st.info("🌍 Fetching trade data from public statistics...")
+    st.info("🌍 Fetching trade data from USGS and World Bank...")
     trade_df = trade_fetcher.fetch_simplified_trade_flows(years=[2023])
 
     if not trade_df.empty:
         trade_df.to_csv(data_dir / "real_trade_flows.csv", index=False)
-        st.success(f"✅ Fetched {len(trade_df)} trade records from enhanced statistics")
+        source_info = ", ".join(trade_df['source'].unique())
+        st.success(f"✅ Loaded {len(trade_df)} trade records from: {source_info}")
     else:
-        st.error("❌ Could not fetch any trade data")
+        st.error("❌ Could not load any trade data")
         return pd.DataFrame(), pd.DataFrame(), "error"
 
     return prices_df, trade_df, "real"
