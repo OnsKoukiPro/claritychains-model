@@ -59,3 +59,294 @@ materials:
 cache:
   enabled: true
   ttl_minutes: 1440
+
+# ============================================================================
+# Enhanced Fundamental Analysis Configuration
+# ============================================================================
+
+gdelt:
+  base_url: "https://api.gdeltproject.org/api/v2/doc/doc"
+  max_records: 250
+  rate_limit_delay: 0.5
+  material_keywords:
+    lithium:
+      - "lithium"
+      - "battery metal"
+      - "ev mineral"
+      - "li-ion"
+      - "lithium mine"
+      - "lithium export"
+    cobalt:
+      - "cobalt"
+      - "cobalt mine"
+      - "drc cobalt"
+      - "battery mineral"
+      - "congo cobalt"
+    nickel:
+      - "nickel"
+      - "nickel mine"
+      - "indonesia nickel"
+      - "battery nickel"
+      - "nickel export"
+    copper:
+      - "copper"
+      - "copper mine"
+      - "copper export"
+      - "red metal"
+      - "copper strike"
+    rare_earths:
+      - "rare earth"
+      - "rare earths"
+      - "neodymium"
+      - "dysprosium"
+      - "china rare earth"
+      - "rare earth export"
+  risk_events:
+    - "export ban"
+    - "export control"
+    - "export restriction"
+    - "strike"
+    - "labor strike"
+    - "mine strike"
+    - "policy change"
+    - "mining policy"
+    - "export policy"
+    - "sanction"
+    - "trade sanction"
+    - "embargo"
+    - "political unrest"
+    - "protest"
+    - "demonstration"
+    - "supply chain disruption"
+    - "shortage"
+    - "production halt"
+
+# Add this to your existing config.yaml under the ev_adoption section:
+
+ev_adoption:
+  data_sources:
+    - "iea"
+    - "bnef"
+    - "usgs"
+  material_intensity:
+    lithium:
+      per_ev_kg: 8.0
+      growth_factor: 1.15
+      data_source: "iea_2024"
+    cobalt:
+      per_ev_kg: 12.0
+      growth_factor: 1.10
+      data_source: "bnef_2024"
+    nickel:
+      per_ev_kg: 40.0
+      growth_factor: 1.12
+      data_source: "usgs_2024"
+    copper:
+      per_ev_kg: 80.0
+      growth_factor: 1.08
+      data_source: "iea_2024"
+    rare_earths:
+      per_ev_kg: 1.0
+      growth_factor: 1.18
+      data_source: "bnef_2024"
+  price_elasticity: 0.3
+  # Fixed scenarios structure - remove the ev_sales_ prefix from keys
+  scenarios:
+    conservative:
+      description: "Conservative growth based on current policies"
+      sales_2024: 14.0
+      sales_2030: 42.5
+      annual_growth: 0.20
+    stated_policies:
+      description: "IEA Stated Policies Scenario"
+      sales_2024: 14.0
+      sales_2030: 60.9
+      annual_growth: 0.28
+    sustainable:
+      description: "IEA Sustainable Development Scenario"
+      sales_2024: 14.0
+      sales_2030: 112.5
+      annual_growth: 0.41
+
+# ============================================================================
+# Enhanced Forecasting Configuration
+# ============================================================================
+
+forecasting:
+  # Core statistical settings
+  rolling_window: 12
+  forecast_horizon: 6
+  confidence_levels: [0.1, 0.5, 0.9]
+  min_data_points: 24
+
+  # Fundamental analysis settings
+  use_fundamentals: true
+  ev_adjustment_weight: 0.3
+  risk_adjustment_weight: 0.2
+
+  # Model behavior
+  enable_backtesting: true
+  backtest_periods: 6
+  save_forecasts: true
+  forecast_format: "csv"
+
+# ============================================================================
+# Risk Assessment & Diversification Configuration
+# ============================================================================
+
+risk_thresholds:
+  # HHI concentration thresholds (0-1 scale)
+  hhi_max: 0.25
+  hhi_high: 0.15
+  hhi_moderate: 0.10
+
+  # Volatility thresholds (coefficient of variation)
+  volatility_high: 0.20
+  volatility_moderate: 0.10
+  volatility_low: 0.05
+
+  # Geopolitical risk thresholds (0-1 scale)
+  risk_critical: 0.7
+  risk_high: 0.5
+  risk_medium: 0.3
+  risk_low: 0.1
+
+diversification:
+  target_hhi: 0.20
+  min_supplier_share: 0.01  # 1% minimum market share to consider
+  max_single_supplier: 0.30  # No single supplier > 30%
+  risk_adjustment: true
+
+# ============================================================================
+# Supplier Risk Scoring Configuration
+# ============================================================================
+
+supplier_risk_scores:
+  # Base risk scores (0-10, higher = more risky)
+  # Factors: political stability, regulatory environment, trade policy, infrastructure
+  China:
+    base_risk: 7
+    factors: ["export control risk", "high concentration", "trade tensions"]
+  Russia:
+    base_risk: 8
+    factors: ["sanctions risk", "political instability", "trade restrictions"]
+  DRC:
+    base_risk: 9
+    factors: ["political instability", "esg concerns", "infrastructure challenges"]
+  Chile:
+    base_risk: 4
+    factors: ["stable but resource nationalism", "water stress"]
+  Australia:
+    base_risk: 2
+    factors: ["low risk", "stable policies", "good infrastructure"]
+  USA:
+    base_risk: 2
+    factors: ["low risk", "stable", "good infrastructure"]
+  Canada:
+    base_risk: 2
+    factors: ["low risk", "stable", "good infrastructure"]
+  Indonesia:
+    base_risk: 5
+    factors: ["export policy changes", "infrastructure challenges"]
+  Philippines:
+    base_risk: 6
+    factors: ["policy uncertainty", "natural disasters"]
+  Peru:
+    base_risk: 5
+    factors: ["social conflicts", "regulatory changes"]
+  Argentina:
+    base_risk: 6
+    factors: ["economic volatility", "policy changes"]
+
+# ============================================================================
+# Procurement & Hedging Configuration
+# ============================================================================
+
+procurement:
+  # Default procurement parameters
+  default_volume: 1000  # metric tons
+  monthly_capacity: 300  # max purchase per month
+  contract_durations: [3, 6, 12]  # months
+
+  # Risk tolerance settings
+  risk_tolerance:
+    low:
+      allocation: [0.4, 0.3, 0.2, 0.1]  # front-loaded
+      description: "Conservative - lock in prices early"
+    medium:
+      allocation: [0.25, 0.25, 0.25, 0.25]  # equal
+      description: "Balanced - average cost over time"
+    high:
+      allocation: [0.1, 0.2, 0.3, 0.4]  # back-loaded
+      description: "Aggressive - bet on lower future prices"
+
+  # Value at Risk settings
+  var_confidence: 0.95
+  risk_aversion: 0.5
+
+# ============================================================================
+# Data Quality & Monitoring Configuration
+# ============================================================================
+
+monitoring:
+  # Data quality thresholds
+  min_data_points: 10
+  max_data_age_days: 365
+  completeness_threshold: 0.8  # 80% complete data
+
+  # Alert thresholds
+  price_change_alert: 0.10  # 10% daily change
+  volatility_alert: 0.25    # 25% annualized volatility
+  risk_score_alert: 0.7     # Critical risk score
+
+  # Update frequencies (minutes)
+  price_update_frequency: 1440    # 24 hours
+  risk_update_frequency: 180      # 3 hours
+  forecast_update_frequency: 10080 # 7 days
+
+# ============================================================================
+# UI & Display Configuration
+# ============================================================================
+
+ui:
+  # Chart settings
+  default_chart_height: 400
+  color_scheme:
+    primary: "#1f77b4"
+    secondary: "#ff7f0e"
+    risk_high: "#d62728"
+    risk_medium: "#ff7f0e"
+    risk_low: "#2ca02c"
+
+  # Display formats
+  currency_format: "USD"
+  number_format: ",.0f"
+  percentage_format: ".1%"
+
+  # Feature toggles
+  enable_comparison_charts: true
+  show_confidence_intervals: true
+  enable_data_export: true
+
+# ============================================================================
+# Logging & Debug Configuration
+# ============================================================================
+
+logging:
+  level: "INFO"
+  file: "logs/critical_materials.log"
+  max_file_size: "10MB"
+  backup_count: 5
+
+  # Module-specific logging
+  modules:
+    forecasting: "INFO"
+    data_fetcher: "INFO"
+    risk_engine: "INFO"
+    gdelt: "DEBUG"
+    ev_adoption: "INFO"
+
+debug:
+  enable_test_mode: false
+  mock_data_fallback: true
+  detailed_error_messages: true

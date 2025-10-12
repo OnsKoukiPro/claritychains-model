@@ -1,15 +1,17 @@
 # src/models/baseline_forecaster.py
 """
-Baseline Statistical Forecaster for Critical Materials Prices
+Enhanced Baseline Statistical Forecaster for Critical Materials Prices
 
-This module provides statistical baseline forecasting using:
+This module provides statistical baseline forecasting with fundamental adjustments:
 - Rolling mean and standard deviation
 - Momentum indicators
 - Volatility regime detection
 - Confidence interval predictions (P10, P50, P90)
+- GDELT geopolitical risk integration
+- EV adoption demand signals
 
 Author: ClarityChain
-Version: 1.0.0
+Version: 2.0.0
 """
 
 import pandas as pd
@@ -19,18 +21,44 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Tuple, Optional
 from loguru import logger
 import warnings
+import sys
+from pathlib import Path
+
+# Add src to path for imports
+src_path = Path(__file__).parent.parent
+sys.path.append(str(src_path))
+
+try:
+    from data_pipeline.ev_adoption_fetcher import EVAdoptionFetcher
+    from data_pipeline.gdelt_fetcher import GDELTFetcher
+except ImportError as e:
+    logger.warning(f"Could not import fundamental data fetchers: {e}")
+    # Create placeholder classes for fallback
+    class EVAdoptionFetcher:
+        def __init__(self, config): pass
+        def get_demand_forecast_adjustment(self, material):
+            return {'adjustment_factor': 1.0, 'demand_growth': 0.0}
+
+    class GDELTFetcher:
+        def __init__(self, config): pass
+        def fetch_events_for_material(self, material): return pd.DataFrame()
+        def generate_risk_score(self, events, material):
+            return {'risk_score': 0.0, 'risk_level': 'LOW', 'recent_events': 0}
+
 warnings.filterwarnings('ignore')
 
 
 class BaselineForecaster:
     """
-    Statistical baseline forecaster for commodity prices
+    Enhanced statistical forecaster for commodity prices with fundamental adjustments
 
     Features:
     - Rolling statistics (mean, std, momentum)
     - Volatility regime classification
     - Multi-horizon forecasting with uncertainty bands
     - Trend detection
+    - GDELT geopolitical risk integration
+    - EV adoption demand signals
 
     Parameters
     ----------
@@ -49,11 +77,22 @@ class BaselineForecaster:
         self.confidence_levels = config['forecasting']['confidence_levels']
         self.min_data_points = config['forecasting'].get('min_data_points', 24)
 
-        logger.info(f"Initialized BaselineForecaster with window={self.window}, horizon={self.horizon}")
+        # Enhanced forecasting settings
+        self.use_fundamentals = config['forecasting'].get('use_fundamentals', True)
+        self.ev_adjustment_weight = config['forecasting'].get('ev_adjustment_weight', 0.3)
+        self.risk_adjustment_weight = config['forecasting'].get('risk_adjustment_weight', 0.2)
 
-    def fit_predict(self, prices_df: pd.DataFrame, material: str) -> Dict:
+        # Initialize fundamental data fetchers
+        self.gdelt_fetcher = GDELTFetcher(config)
+        self.ev_fetcher = EVAdoptionFetcher(config)
+
+        logger.info(f"Initialized Enhanced BaselineForecaster with window={self.window}, horizon={self.horizon}")
+        logger.info(f"Fundamental adjustments: {self.use_fundamentals}")
+
+    def fit_predict(self, prices_df: pd.DataFrame, material: str, use_fundamentals: bool = None) -> Dict:
         """
         Generate forecast with confidence bands for a specific material
+        Enhanced with fundamental factors when use_fundamentals=True
 
         Parameters
         ----------
@@ -61,6 +100,8 @@ class BaselineForecaster:
             DataFrame with columns: date, material, price_usd
         material : str
             Material name to forecast
+        use_fundamentals : bool, optional
+            Whether to include fundamental adjustments (default from config)
 
         Returns
         -------
@@ -70,8 +111,21 @@ class BaselineForecaster:
             - forecast: DataFrame with forecast values and confidence bands
             - metrics: Dict with current metrics and diagnostics
             - model_info: Dict with model metadata
+            - fundamentals: Dict with fundamental adjustment data (if used)
         """
-        logger.info(f"Generating forecast for {material}")
+        if use_fundamentals is None:
+            use_fundamentals = self.use_fundamentals
+
+        if use_fundamentals:
+            return self.fit_predict_with_fundamentals(prices_df, material)
+        else:
+            return self._fit_predict_baseline(prices_df, material)
+
+    def _fit_predict_baseline(self, prices_df: pd.DataFrame, material: str) -> Dict:
+        """
+        Original baseline forecasting without fundamental adjustments
+        """
+        logger.info(f"Generating baseline forecast for {material}")
 
         # Validate and prepare data
         df = self._prepare_data(prices_df, material)
@@ -97,22 +151,151 @@ class BaselineForecaster:
         # Model metadata
         model_info = {
             'model_type': 'statistical_baseline',
-            'version': '1.0.0',
+            'version': '2.0.0',
             'material': material,
             'training_samples': len(df),
             'forecast_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'window': self.window,
-            'horizon': self.horizon
+            'horizon': self.horizon,
+            'fundamental_adjustments': False
         }
 
-        logger.success(f"Forecast generated successfully for {material}")
+        logger.success(f"Baseline forecast generated successfully for {material}")
 
         return {
             'historical': df,
             'forecast': forecast_df,
             'metrics': metrics,
-            'model_info': model_info
+            'model_info': model_info,
+            'fundamentals': None
         }
+
+    def fit_predict_with_fundamentals(self, prices_df: pd.DataFrame, material: str) -> Dict:
+        """
+        Enhanced forecasting with GDELT events and EV adoption signals
+
+        Parameters
+        ----------
+        prices_df : pd.DataFrame
+            DataFrame with columns: date, material, price_usd
+        material : str
+            Material name to forecast
+
+        Returns
+        -------
+        dict
+            Enhanced forecast results with fundamental adjustments
+        """
+        logger.info(f"Generating enhanced forecast with fundamentals for {material}")
+
+        # Get baseline forecast
+        baseline_result = self._fit_predict_baseline(prices_df, material)
+
+        try:
+            # Get EV demand adjustment
+            ev_adjustment = self.ev_fetcher.get_demand_forecast_adjustment(material)
+
+            # Get geopolitical risk events
+            gdelt_events = self.gdelt_fetcher.fetch_events_for_material(material)
+            risk_score = self.gdelt_fetcher.generate_risk_score(gdelt_events, material)
+
+            # Adjust forecast based on fundamentals
+            adjusted_forecast = self._adjust_forecast_with_fundamentals(
+                baseline_result['forecast'],
+                ev_adjustment,
+                risk_score
+            )
+
+            # Update model info
+            baseline_result['model_info']['fundamental_adjustments'] = True
+            baseline_result['model_info']['ev_adjustment_factor'] = ev_adjustment.get('adjustment_factor', 1.0)
+            baseline_result['model_info']['risk_score'] = risk_score.get('risk_score', 0.0)
+
+            # Update results
+            baseline_result['forecast'] = adjusted_forecast
+            baseline_result['fundamentals'] = {
+                'ev_adjustment': ev_adjustment,
+                'geopolitical_risk': risk_score,
+                'gdelt_events_count': len(gdelt_events),
+                'adjustment_weights': {
+                    'ev_weight': self.ev_adjustment_weight,
+                    'risk_weight': self.risk_adjustment_weight
+                }
+            }
+
+            logger.success(f"Enhanced forecast with fundamentals generated for {material}")
+
+        except Exception as e:
+            logger.error(f"Failed to apply fundamental adjustments for {material}: {e}")
+            # Fall back to baseline forecast
+            baseline_result['model_info']['fundamental_adjustments'] = False
+            baseline_result['model_info']['fundamental_error'] = str(e)
+            baseline_result['fundamentals'] = {
+                'error': str(e),
+                'fallback_to_baseline': True
+            }
+
+        return baseline_result
+
+    def _adjust_forecast_with_fundamentals(self, forecast_df: pd.DataFrame,
+                                         ev_adjustment: Dict,
+                                         risk_score: Dict) -> pd.DataFrame:
+        """
+        Adjust statistical forecast with fundamental factors using weighted approach
+
+        Parameters
+        ----------
+        forecast_df : pd.DataFrame
+            Baseline forecast dataframe
+        ev_adjustment : Dict
+            EV adoption demand adjustment factors
+        risk_score : Dict
+            Geopolitical risk scores and events
+
+        Returns
+        -------
+        pd.DataFrame
+            Forecast adjusted for fundamental factors
+        """
+        adjusted_forecast = forecast_df.copy()
+
+        # Apply EV demand adjustment with configurable weight
+        demand_factor = ev_adjustment.get('adjustment_factor', 1.0)
+        weighted_demand_factor = 1.0 + (demand_factor - 1.0) * self.ev_adjustment_weight
+
+        # Apply geopolitical risk adjustment with configurable weight
+        risk_factor = 1.0
+        risk_level = risk_score.get('risk_level', 'LOW')
+
+        if risk_level in ['HIGH', 'CRITICAL']:
+            base_risk_adjustment = 1.1  # 10% upward adjustment for high risk
+        elif risk_level == 'MEDIUM':
+            base_risk_adjustment = 1.05  # 5% upward adjustment
+        else:
+            base_risk_adjustment = 1.0
+
+        weighted_risk_factor = 1.0 + (base_risk_adjustment - 1.0) * self.risk_adjustment_weight
+
+        # Combine adjustments
+        combined_factor = weighted_demand_factor * weighted_risk_factor
+
+        # Adjust forecast values
+        forecast_columns = ['forecast_mean', 'forecast_p10', 'forecast_p50', 'forecast_p90']
+        for col in forecast_columns:
+            if col in adjusted_forecast.columns:
+                adjusted_forecast[col] = adjusted_forecast[col] * combined_factor
+
+        # Add adjustment metadata
+        adjusted_forecast['fundamental_adjustment_factor'] = combined_factor
+        adjusted_forecast['ev_demand_factor'] = weighted_demand_factor
+        adjusted_forecast['risk_adjustment_factor'] = weighted_risk_factor
+        adjusted_forecast['base_ev_factor'] = demand_factor
+        adjusted_forecast['base_risk_factor'] = base_risk_adjustment
+
+        logger.info(f"Applied fundamental adjustments: EV={weighted_demand_factor:.3f}, "
+                   f"Risk={weighted_risk_factor:.3f}, Combined={combined_factor:.3f}")
+
+        return adjusted_forecast
 
     def _prepare_data(self, prices_df: pd.DataFrame, material: str) -> pd.DataFrame:
         """Prepare and validate data for forecasting"""
@@ -321,6 +504,7 @@ class BaselineForecaster:
         # Add metadata
         forecast_df['momentum_adjustment'] = momentum_adjustment
         forecast_df['last_trend'] = last_trend
+        forecast_df['baseline_forecast_mean'] = forecast_df['forecast_mean']  # Store baseline for comparison
 
         return forecast_df
 
@@ -427,10 +611,11 @@ class BaselineForecaster:
         self,
         prices_df: pd.DataFrame,
         material: str,
-        test_periods: int = 6
+        test_periods: int = 6,
+        use_fundamentals: bool = None
     ) -> Dict:
         """
-        Backtest forecaster on historical data
+        Backtest forecaster on historical data with optional fundamental adjustments
 
         Parameters
         ----------
@@ -440,13 +625,18 @@ class BaselineForecaster:
             Material to test
         test_periods : int
             Number of periods to hold out for testing
+        use_fundamentals : bool, optional
+            Whether to use fundamental adjustments in backtest
 
         Returns
         -------
         dict
             Backtest results with error metrics
         """
-        logger.info(f"Running backtest for {material} with {test_periods} test periods")
+        if use_fundamentals is None:
+            use_fundamentals = self.use_fundamentals
+
+        logger.info(f"Running backtest for {material} with {test_periods} test periods, fundamentals={use_fundamentals}")
 
         # Split data
         df = self._prepare_data(prices_df, material)
@@ -456,7 +646,8 @@ class BaselineForecaster:
         # Generate forecast on training data
         result = self.fit_predict(
             train_df.rename(columns={'price_usd': 'price_usd'}),
-            material
+            material,
+            use_fundamentals=use_fundamentals
         )
         forecast = result['forecast']
 
@@ -495,7 +686,7 @@ class BaselineForecaster:
         else:
             direction_accuracy = None
 
-        logger.success(f"Backtest complete: MAPE={mape:.2f}%, RMSE={rmse:.2f}")
+        logger.success(f"Backtest complete: MAPE={mape:.2f}%, RMSE={rmse:.2f}, Fundamentals={use_fundamentals}")
 
         return {
             'errors': errors_df,
@@ -503,8 +694,62 @@ class BaselineForecaster:
             'rmse': float(rmse),
             'mape': float(mape),
             'direction_accuracy': float(direction_accuracy) if direction_accuracy is not None else None,
-            'test_periods': test_periods
+            'test_periods': test_periods,
+            'used_fundamentals': use_fundamentals,
+            'model_type': result['model_info']['model_type']
         }
+
+    def compare_forecast_methods(self, prices_df: pd.DataFrame, material: str) -> Dict:
+        """
+        Compare baseline vs enhanced forecasting methods
+
+        Parameters
+        ----------
+        prices_df : pd.DataFrame
+            Price data
+        material : str
+            Material to analyze
+
+        Returns
+        -------
+        dict
+            Comparison results between baseline and enhanced forecasts
+        """
+        logger.info(f"Comparing forecast methods for {material}")
+
+        # Generate both types of forecasts
+        baseline_result = self.fit_predict(prices_df, material, use_fundamentals=False)
+        enhanced_result = self.fit_predict(prices_df, material, use_fundamentals=True)
+
+        # Compare key metrics
+        baseline_forecast = baseline_result['forecast']
+        enhanced_forecast = enhanced_result['forecast']
+
+        comparison = {
+            'material': material,
+            'baseline': {
+                'mean_forecast': baseline_forecast['forecast_mean'].mean(),
+                'forecast_range': baseline_forecast['forecast_mean'].max() - baseline_forecast['forecast_mean'].min(),
+                'model_type': baseline_result['model_info']['model_type']
+            },
+            'enhanced': {
+                'mean_forecast': enhanced_forecast['forecast_mean'].mean(),
+                'forecast_range': enhanced_forecast['forecast_mean'].max() - enhanced_forecast['forecast_mean'].min(),
+                'model_type': enhanced_result['model_info']['model_type'],
+                'fundamental_adjustment': enhanced_forecast['fundamental_adjustment_factor'].iloc[0] if 'fundamental_adjustment_factor' in enhanced_forecast.columns else 1.0
+            },
+            'difference': {
+                'mean_change_pct': ((enhanced_forecast['forecast_mean'].mean() - baseline_forecast['forecast_mean'].mean()) / baseline_forecast['forecast_mean'].mean()) * 100,
+                'adjustment_applied': 'fundamental_adjustment_factor' in enhanced_forecast.columns
+            }
+        }
+
+        # Add fundamental info if available
+        if enhanced_result['fundamentals'] and 'ev_adjustment' in enhanced_result['fundamentals']:
+            comparison['enhanced']['ev_adjustment'] = enhanced_result['fundamentals']['ev_adjustment']
+            comparison['enhanced']['risk_score'] = enhanced_result['fundamentals']['geopolitical_risk']
+
+        return comparison
 
     def save_forecast(
         self,
@@ -533,6 +778,9 @@ class BaselineForecaster:
             historical_df['is_forecast'] = False
 
             forecast_export = forecast_df[['date', 'forecast_mean', 'forecast_p10', 'forecast_p90']]
+            if 'fundamental_adjustment_factor' in forecast_export.columns:
+                forecast_export['fundamental_adjustment'] = forecast_export['fundamental_adjustment_factor']
+
             forecast_export.columns = ['date', 'price_usd', 'lower_bound', 'upper_bound']
             forecast_export['is_forecast'] = True
 
@@ -545,17 +793,17 @@ class BaselineForecaster:
 
 
 # ============================================================================
-# Usage Example / Main
+# Enhanced Usage Example / Main
 # ============================================================================
 if __name__ == "__main__":
     import yaml
     from pathlib import Path
 
     # Setup logging
-    logger.add("logs/forecaster.log", rotation="10 MB")
+    logger.add("logs/forecaster_enhanced.log", rotation="10 MB")
 
     print("="*70)
-    print("Critical Materials AI - Baseline Forecaster")
+    print("Critical Materials AI - Enhanced Baseline Forecaster")
     print("="*70)
     print()
 
@@ -592,7 +840,7 @@ if __name__ == "__main__":
     print(f"✓ Loaded {len(prices)} price records")
     print()
 
-    # Initialize forecaster
+    # Initialize enhanced forecaster
     forecaster = BaselineForecaster(config)
 
     # Get list of materials
@@ -607,8 +855,11 @@ if __name__ == "__main__":
         print(f"{'='*70}\n")
 
         try:
-            # Generate forecast
-            result = forecaster.fit_predict(prices, material)
+            # Compare baseline vs enhanced forecasts
+            comparison = forecaster.compare_forecast_methods(prices, material)
+
+            # Generate enhanced forecast (with fundamentals)
+            result = forecaster.fit_predict(prices, material, use_fundamentals=True)
 
             # Display metrics
             metrics = result['metrics']
@@ -620,39 +871,62 @@ if __name__ == "__main__":
             print(f"  Momentum Z-score:     {metrics['momentum_zscore']:+.2f}")
             print(f"  Trend:                {metrics['trend']}")
             print(f"  Trend Strength:       {metrics['trend_strength']:+.4f}")
+
+            # Display fundamental adjustments if applied
+            if result['fundamentals'] and not result['fundamentals'].get('fallback_to_baseline', False):
+                fundamentals = result['fundamentals']
+                print("\n🎯 Fundamental Adjustments Applied:")
+                print(f"  EV Demand Factor:    {fundamentals['ev_adjustment'].get('adjustment_factor', 1.0):.3f}")
+                print(f"  Risk Score:          {fundamentals['geopolitical_risk'].get('risk_score', 0.0):.3f}")
+                print(f"  Risk Level:          {fundamentals['geopolitical_risk'].get('risk_level', 'LOW')}")
+                print(f"  Recent Events:       {fundamentals['gdelt_events_count']}")
+
             print()
 
             # Display forecast
             forecast = result['forecast']
-            print("🔮 Forecast (6 months):")
-            print(f"{'Month':<10} {'Mean':>12} {'P10':>12} {'P90':>12}")
-            print("-" * 48)
+            print("🔮 Enhanced Forecast (6 months):")
+            print(f"{'Month':<10} {'Mean':>12} {'P10':>12} {'P90':>12} {'Adj Factor':>12}")
+            print("-" * 60)
 
             for _, row in forecast.iterrows():
                 date_str = row['date'].strftime('%Y-%m')
+                adj_factor = row.get('fundamental_adjustment_factor', 1.0)
                 print(
                     f"{date_str:<10} "
                     f"${row['forecast_mean']:>11,.0f} "
                     f"${row['forecast_p10']:>11,.0f} "
-                    f"${row['forecast_p90']:>11,.0f}"
+                    f"${row['forecast_p90']:>11,.0f} "
+                    f"{adj_factor:>11.3f}"
                 )
             print()
 
+            # Show comparison results
+            print("🔄 Forecast Method Comparison:")
+            diff_pct = comparison['difference']['mean_change_pct']
+            if abs(diff_pct) > 1.0:
+                change_dir = "↑" if diff_pct > 0 else "↓"
+                print(f"  Enhanced vs Baseline: {change_dir} {abs(diff_pct):.1f}% change")
+            else:
+                print("  Enhanced vs Baseline: Minimal change")
+            print()
+
             # Save forecast
-            output_path = f"data/processed/forecast_{material}.csv"
+            output_path = f"data/processed/forecast_enhanced_{material}.csv"
             forecaster.save_forecast(result, output_path)
-            print(f"✓ Forecast saved to: {output_path}")
+            print(f"✓ Enhanced forecast saved to: {output_path}")
 
             # Run backtest if enough data
             if len(prices[prices['material'] == material]) >= 30:
-                print("\n🧪 Running backtest...")
-                backtest_result = forecaster.backtest(prices, material, test_periods=6)
+                print("\n🧪 Running backtest with fundamentals...")
+                backtest_result = forecaster.backtest(prices, material, test_periods=6, use_fundamentals=True)
 
                 print(f"  MAE:                  ${backtest_result['mae']:,.2f}")
                 print(f"  RMSE:                 ${backtest_result['rmse']:,.2f}")
                 print(f"  MAPE:                 {backtest_result['mape']:.2f}%")
                 if backtest_result['direction_accuracy']:
                     print(f"  Direction Accuracy:   {backtest_result['direction_accuracy']:.1%}")
+                print(f"  Used Fundamentals:    {backtest_result['used_fundamentals']}")
 
         except Exception as e:
             logger.error(f"Error forecasting {material}: {e}")
@@ -660,5 +934,5 @@ if __name__ == "__main__":
             continue
 
     print("\n" + "="*70)
-    print("✓ Forecasting complete!")
+    print("✓ Enhanced forecasting complete!")
     print("="*70)
