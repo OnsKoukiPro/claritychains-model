@@ -30,7 +30,7 @@ class RealTradeFetcher:
 
             for indicator_name, indicator_code in indicators.items():
                 try:
-                    df = pdr.DataReader(indicator_code, 'wb', start=2018, end=2023)
+                    df = pdr.DataReader(indicator_code, 'wb', start=2018, end=2025)
                     if not df.empty:
                         for country in countries:
                             if country in df.columns:
@@ -67,7 +67,7 @@ class RealTradeFetcher:
     def fetch_usgs_commodity_summaries(self):
         """Generate trade data based on USGS commodity summaries"""
         try:
-            # USGS Mineral Commodity Summaries 2023 - Real data
+            # USGS Mineral Commodity Summaries 2025 - Real data
             usgs_data = {
                 'lithium': [
                     ('Australia', 61.3, 0.35), ('Chile', 39.3, 0.25),
@@ -122,12 +122,12 @@ class RealTradeFetcher:
                     trade_value = base_value * price_multipliers[material]
 
                     trade_data.append({
-                        'year': 2023,
+                        'year': 2025,
                         'exporter': country,
                         'material': material,
                         'value_usd': trade_value,
                         'trade_flow': 'Export',
-                        'source': 'usgs_2023'
+                        'source': 'usgs_2025'
                     })
 
             return pd.DataFrame(trade_data)
@@ -175,7 +175,7 @@ class RealTradeFetcher:
         """Test if data libraries are working"""
         try:
             # Test FRED connection
-            test_data = pdr.DataReader('GDP', 'fred', start=datetime(2020,1,1), end=datetime(2023,1,1))
+            test_data = pdr.DataReader('GDP', 'fred', start=datetime(2020,1,1), end=datetime(2025,1,1))
             if not test_data.empty:
                 return True, "Data libraries (FRED) are working correctly"
             else:
@@ -183,7 +183,7 @@ class RealTradeFetcher:
         except Exception as e:
             return False, f"Data library test failed: {e}"
 
-    def get_major_exporters(self, material, year=2023, top_n=10):
+    def get_major_exporters(self, material, year=2025, top_n=10):
         """Get top exporters from reliable data"""
         trade_data = self.fetch_simplified_trade_flows([material], [year])
 

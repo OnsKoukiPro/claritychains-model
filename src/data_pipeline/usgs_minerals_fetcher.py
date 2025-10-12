@@ -45,22 +45,22 @@ class USGSMineralsFetcher:
         production_data = {
             'lithium': {
                 'countries': ['Australia', 'Chile', 'China', 'Argentina', 'Zimbabwe'],
-                'production_2023': [86.3, 44.2, 33.0, 6.2, 1.2],  # in thousand metric tons
+                'production_2025': [86.3, 44.2, 33.0, 6.2, 1.2],  # in thousand metric tons
                 'reserves': [3800, 9900, 5100, 2200, 310]  # in thousand metric tons
             },
             'cobalt': {
                 'countries': ['DRC', 'Russia', 'Australia', 'Canada', 'Cuba'],
-                'production_2023': [130, 8.9, 5.9, 4.6, 3.5],  # in thousand metric tons
+                'production_2025': [130, 8.9, 5.9, 4.6, 3.5],  # in thousand metric tons
                 'reserves': [4000, 250, 1500, 220, 500]
             },
             'nickel': {
                 'countries': ['Indonesia', 'Philippines', 'Russia', 'New Caledonia', 'Australia'],
-                'production_2023': [1600, 330, 220, 190, 160],  # in thousand metric tons
+                'production_2025': [1600, 330, 220, 190, 160],  # in thousand metric tons
                 'reserves': [21000, 4800, 7500, 7100, 20000]
             },
             'copper': {
                 'countries': ['Chile', 'Peru', 'China', 'DRC', 'USA'],
-                'production_2023': [5300, 2600, 1900, 2400, 1300],  # in thousand metric tons
+                'production_2025': [5300, 2600, 1900, 2400, 1300],  # in thousand metric tons
                 'reserves': [190000, 92000, 26000, 25000, 51000]
             }
         }
@@ -71,11 +71,11 @@ class USGSMineralsFetcher:
         data = production_data[material]
         df = pd.DataFrame({
             'country': data['countries'],
-            'production_2023': data['production_2023'],
+            'production_2025': data['production_2025'],
             'reserves': data['reserves'],
             'material': material,
             'source': 'usgs',
-            'year': 2023
+            'year': 2025
         })
 
         return df

@@ -272,7 +272,7 @@ def fetch_real_data():
     # Fetch trade data
     st.info("🌍 Fetching trade data from USGS and World Bank...")
     try:
-        trade_df = trade_fetcher.fetch_simplified_trade_flows(years=[2023])
+        trade_df = trade_fetcher.fetch_simplified_trade_flows(years=[2025])
 
         if not trade_df.empty:
             trade_df.to_csv(data_dir / "real_trade_flows.csv", index=False)
