@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent / 'src'))
 
 try:
-    from data_pipeline.real_price_fetcher import RealPriceFetcher
+    from data_pipeline.global_price_fetcher import GlobalCommodityFetcher
     from data_pipeline.real_trade_fetcher import RealTradeFetcher
 except ImportError as e:
     print(f"Import error: {e}")
@@ -41,7 +41,7 @@ def fetch_all_data():
 
         # Fetch price data
         logger.info("Fetching price data...")
-        price_fetcher = RealPriceFetcher(config)
+        price_fetcher = GlobalCommodityFetcher(config)
         prices_df = price_fetcher.fetch_all_prices()
 
         if not prices_df.empty:

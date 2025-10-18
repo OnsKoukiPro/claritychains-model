@@ -1,29 +1,28 @@
-# Core Data Science - Stable versions
-streamlit==1.28.0
-pandas==1.5.3
-numpy==1.24.3
-plotly==5.13.1
+# Core dependencies
+pandas>=2.0.0
+numpy>=1.24.0
+pyyaml>=6.0
 
-# Data APIs - Only reliable ones
-requests==2.28.2
-yfinance==0.2.18
-
-# Utilities - Essential only
-pyyaml==6.0
-python-dotenv==0.19.2
-scikit-learn==1.2.2
-
-# Remove ALL problematic packages:
-# wbdata
-# - alpha_vantage (requires API key, often fails)
-# - pandas-datareader (outdated)
-# - statsmodels (large, not essential for MVP)
-# - beautifulsoup4 & lxml (not needed yet)
-# - cachetools (not essential)
-# - comtrade packages (all problematic)
-
+# Data fetching
 pandas-datareader>=0.10.0
-yfinance>=0.2.18
-pandas>=1.5.0
-numpy>=1.21.0
-pandas-datareader
+yfinance>=0.2.28
+wbgapi>=1.0.12
+requests>=2.31.0
+
+# Logging
+loguru>=0.7.0
+
+# Forecasting and analysis
+statsmodels>=0.14.0
+scipy>=1.11.0
+
+# Optional but recommended
+python-dotenv>=1.0.0
+openpyxl>=3.1.0  # For Excel support
+
+# Web framework (if using Streamlit)
+streamlit>=1.28.0
+
+# Visualization
+plotly>=5.17.0
+matplotlib>=3.7.0
