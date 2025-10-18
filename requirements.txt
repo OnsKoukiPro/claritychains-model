@@ -26,3 +26,4 @@ pandas-datareader>=0.10.0
 yfinance>=0.2.18
 pandas>=1.5.0
 numpy>=1.21.0
+pandas-datareader

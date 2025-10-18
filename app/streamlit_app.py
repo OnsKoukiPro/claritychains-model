@@ -40,12 +40,20 @@ def safe_import(module_name, class_name):
         logger.warning(f"Import error for {class_name} from {module_name}: {e}")
         return None
 
-# Try imports with fallbacks
+# Try imports with fallbacks - UPDATED TO USE GlobalCommodityFetcher
 try:
-    from data_pipeline.real_price_fetcher import RealPriceFetcher
+    from data_pipeline.global_price_fetcher import GlobalCommodityFetcher  # CHANGED
+    logger.info("✅ Successfully imported GlobalCommodityFetcher")
 except ImportError as e:
-    logger.warning(f"RealPriceFetcher import failed: {e}")
-    RealPriceFetcher = None
+    logger.warning(f"GlobalCommodityFetcher import failed: {e}")
+    # Try to import the old one as fallback
+    try:
+        from data_pipeline.real_price_fetcher import RealPriceFetcher
+        GlobalCommodityFetcher = RealPriceFetcher  # Use old class as fallback
+        logger.info("✅ Using RealPriceFetcher as fallback")
+    except ImportError:
+        logger.error("Both price fetchers failed to import")
+        GlobalCommodityFetcher = None
 
 try:
     from data_pipeline.real_trade_fetcher import RealTradeFetcher
@@ -189,7 +197,7 @@ def load_config():
     except Exception as e:
         logger.error(f"Config load error: {e}")
 
-    # Default configuration
+    # Default configuration - ENHANCED WITH GLOBAL SOURCES
     return {
         'paths': {
             'data_dir': './data',
@@ -197,7 +205,8 @@ def load_config():
             'processed_data': './data/processed'
         },
         'materials': {
-            'lithium': {}, 'cobalt': {}, 'nickel': {}, 'copper': {}, 'rare_earths': {}
+            'lithium': {}, 'cobalt': {}, 'nickel': {}, 'copper': {}, 'rare_earths': {},
+            'aluminum': {}, 'zinc': {}, 'lead': {}, 'tin': {}  # ADDED MORE MATERIALS
         },
         'forecasting': {
             'use_fundamentals': True,
@@ -218,23 +227,30 @@ def load_config():
                 'cobalt': {'per_ev_kg': 12.0, 'growth_factor': 1.10},
                 'nickel': {'per_ev_kg': 40.0, 'growth_factor': 1.12},
                 'copper': {'per_ev_kg': 80.0, 'growth_factor': 1.08},
-                'rare_earths': {'per_ev_kg': 1.0, 'growth_factor': 1.18}
+                'rare_earths': {'per_ev_kg': 1.0, 'growth_factor': 1.18},
+                'aluminum': {'per_ev_kg': 180.0, 'growth_factor': 1.05}  # ADDED
             },
             'price_elasticity': 0.3
+        },
+        'global_sources': {  # ADDED NEW CONFIG SECTION
+            'ecb_enabled': True,
+            'worldbank_enabled': True,
+            'lme_enabled': True,
+            'global_futures_enabled': True
         }
     }
 
 def fetch_real_data():
-    """Fetch real data using reliable Python libraries"""
+    """Fetch real data using reliable Python libraries - UPDATED FOR GLOBAL SOURCES"""
     config = load_config()
 
-    # Check if fetchers are available
-    if RealPriceFetcher is None or RealTradeFetcher is None:
+    # Check if fetchers are available - UPDATED TO GlobalCommodityFetcher
+    if GlobalCommodityFetcher is None or RealTradeFetcher is None:
         st.error("❌ Data fetchers not available. Please check the installation.")
         return pd.DataFrame(), pd.DataFrame(), "error"
 
-    # Initialize data fetchers
-    price_fetcher = RealPriceFetcher(config)
+    # Initialize data fetchers - UPDATED TO GlobalCommodityFetcher
+    price_fetcher = GlobalCommodityFetcher(config)  # CHANGED
     trade_fetcher = RealTradeFetcher(config)
 
     # Create data directory
@@ -253,15 +269,36 @@ def fetch_real_data():
     except Exception as e:
         st.warning(f"Data availability test failed: {e}")
 
-    # Fetch price data
-    st.info("📡 Fetching price data from FRED and market analysis...")
+    # Fetch price data - ENHANCED SOURCE DESCRIPTION
+    st.info("🌍 Fetching price data from global sources (FRED, ECB, World Bank, LME)...")
     try:
         prices_df = price_fetcher.fetch_all_prices()
 
         if not prices_df.empty:
             prices_df.to_csv(data_dir / "real_prices.csv", index=False)
-            source_info = ", ".join(prices_df['source'].unique()) if 'source' in prices_df.columns else "Unknown"
-            st.success(f"✅ Loaded {len(prices_df)} price records from: {source_info}")
+            if 'source' in prices_df.columns:
+                source_counts = prices_df['source'].value_counts()
+                source_info = ", ".join([f"{k} ({v} recs)" for k, v in source_counts.items()])
+                st.success(f"✅ Loaded {len(prices_df)} price records from: {source_info}")
+            else:
+                st.success(f"✅ Loaded {len(prices_df)} price records")
+
+            # Show regional breakdown
+            if 'source' in prices_df.columns:
+                regional_sources = {
+                    'US': ['fred', 'etf_', 'futures_'],
+                    'Europe': ['ecb', 'lme'],
+                    'Global': ['worldbank', 'market_analysis']
+                }
+
+                regional_counts = {}
+                for region, sources in regional_sources.items():
+                    count = sum(prices_df['source'].str.contains('|'.join(sources)).sum())
+                    if count > 0:
+                        regional_counts[region] = count
+
+                if regional_counts:
+                    st.info(f"**Regional Coverage:** {', '.join([f'{k}: {v} recs' for k, v in regional_counts.items()])}")
         else:
             st.error("❌ Could not load any price data")
             return pd.DataFrame(), pd.DataFrame(), "error"
@@ -309,20 +346,86 @@ def load_data():
     # Only fetch real data - no sample fallback
     return fetch_real_data()
 
+def show_data_sources(config, prices_df, trade_df, data_source):
+    """Enhanced data sources display with global coverage"""
+    st.header("🌐 Data Sources & Coverage")
+
+    st.subheader("Global Price Data Sources")
+
+    # Create columns for source overview
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown("**🇺🇸 US Sources**")
+        st.markdown("""
+        - **FRED** (Federal Reserve Economic Data)
+        - US ETFs & Futures
+        - Yahoo Finance US tickers
+        """)
+
+    with col2:
+        st.markdown("**🇪🇺 European Sources**")
+        st.markdown("""
+        - **ECB** (European Central Bank)
+        - **LME** (London Metal Exchange)
+        - European ETFs
+        """)
+
+    with col3:
+        st.markdown("**🌍 Global Sources**")
+        st.markdown("""
+        - **World Bank** Pink Sheet
+        - Global futures markets
+        - Multi-region ETFs
+        """)
+
+    # Show actual data coverage
+    if not prices_df.empty and 'source' in prices_df.columns:
+        st.subheader("Current Data Coverage")
+
+        # Source breakdown
+        source_stats = prices_df['source'].value_counts()
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**Records by Source:**")
+            for source, count in source_stats.items():
+                st.write(f"- {source}: {count:,} records")
+
+        with col2:
+            # Regional breakdown
+            regional_map = {
+                'US': ['fred', 'etf_', 'futures_'],
+                'Europe': ['ecb', 'lme'],
+                'Global': ['worldbank', 'market_analysis']
+            }
+
+            regional_counts = {}
+            for region, sources in regional_map.items():
+                count = sum(prices_df['source'].str.contains('|'.join(sources)).sum())
+                regional_counts[region] = count
+
+            st.markdown("**Regional Distribution:**")
+            for region, count in regional_counts.items():
+                if count > 0:
+                    percentage = (count / len(prices_df)) * 100
+                    st.write(f"- {region}: {count:,} records ({percentage:.1f}%)")
+
 def main():
     st.set_page_config(
-        page_title="Critical Materials AI Platform - Enhanced",
+        page_title="Critical Materials AI Platform - Global Enhanced",
         layout="wide",
-        page_icon="🛡️"
+        page_icon="🌍"  # CHANGED ICON
     )
 
-    st.title("🛡️ Critical Materials AI Platform")
-    st.markdown("**Real-time procurement intelligence for critical minerals supply chains**")
+    st.title("🌍 Critical Materials AI Platform - Global Edition")  # UPDATED TITLE
+    st.markdown("**Multi-region procurement intelligence for critical minerals supply chains**")  # UPDATED
 
-    # Enhanced subtitle with new features
+    # Enhanced subtitle with global features
     st.markdown("""
     <style>
-    .enhanced-features {
+    .global-features {
         background: linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #feca57);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
@@ -330,12 +433,17 @@ def main():
         font-size: 1.1em;
     }
     </style>
-    <div class="enhanced-features">
-    🚀 NEW: EV Adoption Demand Forecasting • 🌍 Geopolitical Risk Monitoring • 📊 Fundamental-Adjusted Predictions
+    <div class="global-features">
+    🌐 NEW: Global Data Sources (US, Europe, World Bank) • 🚀 Multi-Region Coverage • 📊 Enhanced Reliability
     </div>
     """, unsafe_allow_html=True)
 
     # Show import status
+    if GlobalCommodityFetcher is None:
+        st.error("⚠️ GlobalCommodityFetcher not available - data sourcing limited")
+    else:
+        st.sidebar.success("✅ GlobalCommodityFetcher loaded")
+
     if BaselineForecaster is None:
         st.warning("⚠️ Enhanced forecasting limited - some features may not work properly")
 
@@ -343,36 +451,44 @@ def main():
     if os.path.exists('/.dockerenv'):
         st.sidebar.success("🐳 Running in Docker container")
 
-    # Data source selection
+    # Data source selection - ENHANCED OPTIONS
     st.sidebar.header("Data Sources")
     use_real_data = st.sidebar.checkbox("Use Real API Data", value=True)
     use_enhanced_forecasting = st.sidebar.checkbox("Use Enhanced Forecasting", value=True,
                                                   help="Include EV adoption and geopolitical risk in forecasts")
-    refresh_data = st.sidebar.button("Refresh Data from APIs")
+    refresh_data = st.sidebar.button("Refresh Data from Global APIs")  # UPDATED TEXT
 
     # Load data
     if refresh_data or use_real_data:
-        with st.spinner("Fetching real data from APIs..."):
+        with st.spinner("Fetching global data from APIs..."):  # UPDATED TEXT
             prices_df, trade_df, data_source = fetch_real_data()
     else:
         prices_df, trade_df, data_source = load_data()
 
-    # Display data source info
+    # Display data source info - ENHANCED
     if data_source == "real":
-        st.sidebar.success("✅ Using Real API Data")
-        st.sidebar.info("Sources: World Bank, UN Comtrade, Yahoo Finance, USGS")
+        st.sidebar.success("✅ Using Global API Data")  # UPDATED
+        if not prices_df.empty and 'source' in prices_df.columns:
+            sources = prices_df['source'].unique()
+            if any('ecb' in str(s) for s in sources) or any('lme' in str(s) for s in sources):
+                st.sidebar.info("🌍 Sources: World Bank, ECB, LME, FRED, Yahoo Finance")
+            else:
+                st.sidebar.info("🇺🇸 Sources: FRED, World Bank, Yahoo Finance")
+        else:
+            st.sidebar.info("Sources: Multiple global sources")
+
         if use_enhanced_forecasting:
             st.sidebar.success("🎯 Enhanced Forecasting: ON")
         else:
             st.sidebar.info("📊 Baseline Forecasting: ON")
     else:
         st.sidebar.warning("📊 Using Sample Data")
-        st.sidebar.info("Enable 'Use Real API Data' for live data")
+        st.sidebar.info("Enable 'Use Real API Data' for live global data")
 
-    # Enhanced main tabs with new features
+    # Enhanced main tabs with global focus
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-        "📊 Live Dashboard", "📈 Enhanced Forecasting", "🚗 EV Adoption",
-        "🌍 Geopolitical Risk", "💳 Procurement", "🔗 Supply Chain", "⚙️ Data Sources"
+        "📊 Global Dashboard", "📈 Enhanced Forecasting", "🚗 EV Adoption",  # UPDATED
+        "🌍 Geopolitical Risk", "💳 Procurement", "🔗 Supply Chain", "🌐 Data Sources"  # UPDATED
     ])
 
     with tab1:
@@ -397,14 +513,14 @@ def main():
         show_data_sources(load_config(), prices_df, trade_df, data_source)
 
 def show_live_dashboard(prices_df, trade_df, data_source):
-    """Live dashboard with real data"""
-    st.header("📊 Live Market Dashboard")
+    """Live dashboard with global data - ENHANCED"""
+    st.header("📊 Global Market Dashboard")  # UPDATED
 
     if prices_df.empty:
         st.warning("No price data available")
         return
 
-    # Key metrics - enhanced with more indicators
+    # Key metrics - enhanced with global indicators
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
@@ -435,47 +551,81 @@ def show_live_dashboard(prices_df, trade_df, data_source):
             st.metric("Materials Tracked", 0)
 
     with col4:
-        if not trade_df.empty and 'exporter' in trade_df.columns:
-            suppliers_count = len(trade_df['exporter'].unique())
-            st.metric("Suppliers Monitored", suppliers_count)
-        else:
-            st.metric("Data Source", data_source)
+        if not prices_df.empty and 'source' in prices_df.columns:
+            # Count unique regions
+            regional_sources = {
+                'US': ['fred', 'etf_', 'futures_'],
+                'Europe': ['ecb', 'lme'],
+                'Global': ['worldbank', 'market_analysis']
+            }
+            regions_covered = []
+            for region, sources in regional_sources.items():
+                if any(prices_df['source'].str.contains('|'.join(sources)).any()):
+                    regions_covered.append(region)
+            st.metric("Regions Covered", len(regions_covered))
 
-    # Real-time price trends
-    st.subheader("📈 Live Price Trends")
+    # Real-time price trends with source coloring
+    st.subheader("📈 Global Price Trends")
 
-    if 'material' in prices_df.columns and 'price' in prices_df.columns:
-        # Show latest prices by material
+    if 'material' in prices_df.columns and 'price' in prices_df.columns and 'source' in prices_df.columns:
+        # Show latest prices by material with source info
         latest = prices_df.sort_values('date').groupby('material').tail(1)
-        fig = px.bar(latest, x='material', y='price', color='material',
-                    title="Current Prices by Material")
+
+        # Add source type for coloring
+        def get_source_type(source):
+            if 'fred' in str(source).lower():
+                return 'US'
+            elif 'ecb' in str(source).lower() or 'lme' in str(source).lower():
+                return 'Europe'
+            elif 'worldbank' in str(source).lower():
+                return 'Global'
+            else:
+                return 'Other'
+
+        latest['source_type'] = latest['source'].apply(get_source_type)
+
+        fig = px.bar(latest, x='material', y='price', color='source_type',
+                    title="Current Prices by Material and Region",
+                    color_discrete_map={'US': '#1f77b4', 'Europe': '#ff7f0e', 'Global': '#2ca02c', 'Other': '#7f7f7f'})
         st.plotly_chart(fig, use_container_width=True)
 
-        # Price history with enhanced visualization
-        st.subheader("📊 Price History & Volatility")
+        # Price history with enhanced visualization by source
+        st.subheader("📊 Multi-Source Price History")
 
-        # Create price history plot
+        # Create price history plot with source differentiation
         fig = go.Figure()
 
-        # Price lines
+        # Group by material and source for better visualization
         for material in prices_df['material'].unique():
             material_data = prices_df[prices_df['material'] == material]
-            fig.add_trace(go.Scatter(
-                x=material_data['date'], y=material_data['price'],
-                name=f'{material} Price', line=dict(width=2)
-            ))
+
+            # Show different sources with different line styles
+            sources = material_data['source'].unique()
+            for i, source in enumerate(sources):
+                source_data = material_data[material_data['source'] == source]
+                line_style = 'solid' if 'fred' in source else 'dash' if 'ecb' in source else 'dot'
+
+                fig.add_trace(go.Scatter(
+                    x=source_data['date'],
+                    y=source_data['price'],
+                    name=f'{material} ({source})',
+                    line=dict(width=2, dash=line_style),
+                    opacity=0.7
+                ))
 
         fig.update_layout(
-            title="Historical Price Trends",
+            title="Historical Price Trends from Multiple Sources",
             xaxis_title="Date",
             yaxis_title="Price (USD/t)",
-            hovermode='x unified'
+            hovermode='x unified',
+            height=500
         )
         st.plotly_chart(fig, use_container_width=True)
 
-    # Data source info
+    # Enhanced data source info
     if not prices_df.empty and 'source' in prices_df.columns:
-        st.info(f"**Data Sources:** {', '.join(prices_df['source'].unique())}")
+        source_counts = prices_df['source'].value_counts()
+        st.info(f"**Global Data Sources:** {', '.join([f'{k} ({v} recs)' for k, v in source_counts.items()])}")
 
 def show_enhanced_forecasting(prices_df, data_source, use_enhanced_forecasting=True):
     """Enhanced forecasting with fundamental adjustments"""
