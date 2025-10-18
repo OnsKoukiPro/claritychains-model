@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import pandas_datareader as pdr
+from utils.world_bank_fetcher import fetch_worldbank_commodities
 import yfinance as yf
 import wbgapi as wb
 import requests
@@ -54,57 +55,11 @@ class GlobalCommodityFetcher:
             return pd.DataFrame()
 
     def fetch_worldbank_commodities(self):
-        """Fetch global commodity data from World Bank - CORRECTED VERSION"""
+        """Wrapper that uses the robust helper defined above."""
         try:
-            # Correct World Bank Pink Sheet commodity indicators
-            wb_indicators = {
-                'PCOPP': 'copper',
-                'PALUM': 'aluminum',
-                'PNICK': 'nickel',
-                'PZINC': 'zinc',
-                'PLEAD': 'lead',
-                'PTIN': 'tin',
-            }
-
-            all_data = []
-            current_year = datetime.now().year
-
-            for indicator, material in wb_indicators.items():
-                try:
-                    # Fetch annual data for the last 5 years
-                    data = wb.data.fetch(
-                        indicator,
-                        'WLD',  # World
-                        time=range(current_year - 5, current_year + 1)
-                    )
-
-                    if data:
-                        # Convert to DataFrame
-                        records = []
-                        for item in data:
-                            if item.get('value') is not None:
-                                year = item.get('time', '')
-                                if year:
-                                    records.append({
-                                        'date': pd.to_datetime(f'{year}-01-01'),
-                                        'material': material,
-                                        'price': float(item['value']),
-                                        'source': 'worldbank'
-                                    })
-
-                        if records:
-                            df = pd.DataFrame(records)
-                            all_data.append(df)
-                            logger.info(f"✅ World Bank data for {material}: {len(df)} records")
-
-                except Exception as e:
-                    logger.debug(f"World Bank failed for {material} ({indicator}): {e}")
-                    continue
-
-            return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
-
-        except Exception as e:
-            logger.error(f"World Bank data fetch failed: {e}")
+            return fetch_worldbank_commodities(pink_sheet=True)
+        except Exception as exc:               # pragma: no cover
+            logger.error(f"World Bank fetch crashed: {exc}")
             return pd.DataFrame()
 
     def fetch_working_etf_data(self):
