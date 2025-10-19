@@ -1039,7 +1039,7 @@ def show_geopolitical_risk():
 # ... (keep the remaining functions exactly as they were)
 
 def show_procurement_analysis(prices_df):
-    """Procurement analysis with real data"""
+    """Procurement analysis with real data and editable plans"""
     st.header("💳 Procurement Strategy")
 
     if prices_df.empty:
@@ -1065,7 +1065,8 @@ def show_procurement_analysis(prices_df):
     col1, col2, col3 = st.columns(3)
     with col1:
         if not material_data.empty:
-            st.metric("Current Price", f"${material_data['price'].iloc[-1]:,.0f}")
+            current_price = material_data['price'].iloc[-1]
+            st.metric("Current Price", f"${current_price:,.0f}")
         else:
             st.metric("Current Price", "N/A")
     with col2:
@@ -1159,36 +1160,175 @@ def show_procurement_analysis(prices_df):
                     except Exception as e:
                         st.warning(f"Could not incorporate fundamental analysis: {e}")
 
+                # Generate initial plan
                 plan_data = []
-                total_cost = 0
                 for i, alloc in enumerate(allocation):
                     monthly_volume = int(total_volume * alloc)
                     monthly_cost = current_price * monthly_volume
-                    total_cost += monthly_cost
 
                     plan_data.append({
                         'Month': i + 1,
-                        'Allocation': f"{alloc*100:.0f}%",
-                        'Volume (tonnes)': monthly_volume,
-                        'Price/t': f"${current_price:,.0f}",
-                        'Monthly Cost': f"${monthly_cost:,.0f}",
+                        'Allocation_Percent': alloc,
+                        'Volume_tonnes': monthly_volume,
+                        'Price_per_tonne': current_price,
+                        'Monthly_Cost': monthly_cost,
                         'Strategy': strategy
                     })
 
-                # Display plan
-                st.dataframe(pd.DataFrame(plan_data), use_container_width=True)
+                # Store in session state for editing
+                st.session_state.procurement_plan = plan_data
+                st.session_state.procurement_strategy = strategy
+                st.session_state.current_price = current_price
 
-                # Summary metrics
+        # Display editable plan if it exists
+        if 'procurement_plan' in st.session_state:
+            st.subheader("📊 Editable Procurement Plan")
+
+            # Create editable dataframe
+            editable_df = pd.DataFrame(st.session_state.procurement_plan)
+            display_df = editable_df.copy()
+
+            # Format for display
+            display_df['Allocation'] = display_df['Allocation_Percent'].apply(lambda x: f"{x*100:.0f}%")
+            display_df['Price/t'] = display_df['Price_per_tonne'].apply(lambda x: f"${x:,.0f}")
+            display_df['Monthly Cost'] = display_df['Monthly_Cost'].apply(lambda x: f"${x:,.0f}")
+
+            # Show current plan
+            st.write("**Current Plan:**")
+            st.dataframe(display_df[['Month', 'Allocation', 'Volume_tonnes', 'Price/t', 'Monthly Cost']],
+                        use_container_width=True)
+
+            # Volume editing interface
+            st.subheader("✏️ Modify Volumes")
+            st.write("Adjust monthly volumes to see how it affects your procurement strategy:")
+
+            # Create columns for volume inputs
+            cols = st.columns(len(st.session_state.procurement_plan))
+            updated_volumes = []
+
+            for i, month_data in enumerate(st.session_state.procurement_plan):
+                with cols[i]:
+                    month = month_data['Month']
+                    current_vol = month_data['Volume_tonnes']
+                    allocation_pct = month_data['Allocation_Percent']
+
+                    new_volume = st.number_input(
+                        f"Month {month} Volume (tonnes)",
+                        min_value=0,
+                        value=current_vol,
+                        step=10,
+                        key=f"vol_{month}"
+                    )
+                    updated_volumes.append(new_volume)
+
+                    # Show allocation percentage based on new volume
+                    total_planned = sum(updated_volumes) if updated_volumes else total_volume
+                    if total_planned > 0:
+                        new_allocation = (new_volume / total_planned) * 100
+                        st.write(f"Allocation: {new_allocation:.1f}%")
+
+            # Calculate and display updated plan
+            if st.button("Update Plan", type="secondary"):
+                total_updated_volume = sum(updated_volumes)
+
+                if total_updated_volume == 0:
+                    st.error("Total volume cannot be zero!")
+                else:
+                    # Update the plan with new volumes
+                    updated_plan = []
+                    total_updated_cost = 0
+
+                    for i, month_data in enumerate(st.session_state.procurement_plan):
+                        new_volume = updated_volumes[i]
+                        new_cost = st.session_state.current_price * new_volume
+                        total_updated_cost += new_cost
+                        new_allocation = new_volume / total_updated_volume
+
+                        updated_plan.append({
+                            'Month': month_data['Month'],
+                            'Allocation_Percent': new_allocation,
+                            'Volume_tonnes': new_volume,
+                            'Price_per_tonne': st.session_state.current_price,
+                            'Monthly_Cost': new_cost,
+                            'Strategy': f"Custom - {st.session_state.procurement_strategy}"
+                        })
+
+                    # Update session state
+                    st.session_state.procurement_plan = updated_plan
+
+                    # Show updated metrics
+                    st.success("Plan updated successfully!")
+
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Total Volume", f"{total_updated_volume:,} t")
+                    with col2:
+                        st.metric("Average Price", f"${st.session_state.current_price:,.0f}/t")
+                    with col3:
+                        st.metric("Total Cost", f"${total_updated_cost:,.0f}")
+                    with col4:
+                        avg_cost_per_ton = total_updated_cost / total_updated_volume if total_updated_volume > 0 else 0
+                        st.metric("Avg Cost/t", f"${avg_cost_per_ton:,.0f}")
+
+                    # Show allocation breakdown
+                    st.subheader("📈 Updated Allocation Breakdown")
+                    allocation_data = {
+                        'Month': [f"Month {p['Month']}" for p in updated_plan],
+                        'Allocation %': [f"{p['Allocation_Percent']*100:.1f}%" for p in updated_plan],
+                        'Volume (t)': [p['Volume_tonnes'] for p in updated_plan],
+                        'Cost': [f"${p['Monthly_Cost']:,.0f}" for p in updated_plan]
+                    }
+                    st.dataframe(pd.DataFrame(allocation_data), use_container_width=True)
+
+                    # Visualization
+                    fig_col1, fig_col2 = st.columns(2)
+
+                    with fig_col1:
+                        # Volume allocation pie chart
+                        import plotly.express as px
+                        fig_volume = px.pie(
+                            values=[p['Volume_tonnes'] for p in updated_plan],
+                            names=[f"Month {p['Month']}" for p in updated_plan],
+                            title="Volume Allocation by Month"
+                        )
+                        st.plotly_chart(fig_volume, use_container_width=True)
+
+                    with fig_col2:
+                        # Cost allocation pie chart
+                        fig_cost = px.pie(
+                            values=[p['Monthly_Cost'] for p in updated_plan],
+                            names=[f"Month {p['Month']}" for p in updated_plan],
+                            title="Cost Allocation by Month"
+                        )
+                        st.plotly_chart(fig_cost, use_container_width=True)
+
+            # Risk analysis based on current plan
+            st.subheader("📊 Risk Analysis")
+            if 'procurement_plan' in st.session_state:
+                current_plan = st.session_state.procurement_plan
+                total_vol = sum(p['Volume_tonnes'] for p in current_plan)
+                total_cost = sum(p['Monthly_Cost'] for p in current_plan)
+
+                # Calculate concentration risk
+                max_month_alloc = max(p['Allocation_Percent'] for p in current_plan)
+                concentration_risk = "HIGH" if max_month_alloc > 0.5 else "MEDIUM" if max_month_alloc > 0.3 else "LOW"
+
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.metric("Total Volume", f"{total_volume:,} t")
+                    st.metric("Concentration Risk", concentration_risk)
                 with col2:
-                    st.metric("Average Price", f"${current_price:,.0f}/t")
+                    st.metric("Max Monthly Allocation", f"{max_month_alloc*100:.1f}%")
                 with col3:
-                    st.metric("Total Cost", f"${total_cost:,.0f}")
+                    months_with_volume = sum(1 for p in current_plan if p['Volume_tonnes'] > 0)
+                    st.metric("Active Months", f"{months_with_volume}/{len(current_plan)}")
 
-                # Strategy explanation
-                st.info(f"**Strategy:** {strategy}")
+                # Risk recommendations
+                if concentration_risk == "HIGH":
+                    st.warning("**Recommendation:** Consider diversifying purchases across more months to reduce concentration risk.")
+                elif concentration_risk == "MEDIUM":
+                    st.info("**Recommendation:** Current allocation provides moderate risk diversification.")
+                else:
+                    st.success("**Recommendation:** Well-diversified procurement strategy.")
     else:
         st.warning("No price data available for selected material")
 
