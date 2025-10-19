@@ -515,120 +515,640 @@ def main():
     with tab7:
         show_data_sources(load_config(), prices_df, trade_df, data_source)
 
+def classify_data_source(source):
+    """Classify data source by region and type"""
+    source_lower = str(source).lower()
+
+    # Region classification
+    if 'fred' in source_lower or 'etf_' in source_lower:
+        region = 'North America'
+    elif 'ecb' in source_lower or 'lme' in source_lower:
+        region = 'Europe'
+    elif 'worldbank' in source_lower:
+        region = 'Global'
+    elif 'asia' in source_lower or 'shanghai' in source_lower:
+        region = 'Asia'
+    else:
+        region = 'Other'
+
+    # Market type classification
+    if 'fred' in source_lower:
+        market_type = 'Government Data'
+    elif 'etf_' in source_lower:
+        market_type = 'ETF'
+    elif 'futures_' in source_lower:
+        market_type = 'Futures'
+    elif 'lme' in source_lower:
+        market_type = 'Exchange'
+    elif 'worldbank' in source_lower:
+        market_type = 'International'
+    else:
+        market_type = 'Market Analysis'
+
+    return region, market_type
+
+def enrich_price_data(prices_df):
+    """Add region and market type classifications to price data"""
+    if prices_df.empty:
+        return prices_df
+
+    prices_df = prices_df.copy()
+
+    # Add classifications
+    classifications = prices_df['source'].apply(
+        lambda x: pd.Series(classify_data_source(x))
+    )
+    prices_df['region'] = classifications[0]
+    prices_df['market_type'] = classifications[1]
+
+    # Add material grade classification (if not already present)
+    if 'grade' not in prices_df.columns:
+        prices_df['grade'] = prices_df['material'].apply(
+            lambda x: 'Standard' if x in ['copper', 'aluminum', 'zinc', 'lead', 'tin', 'nickel']
+            else 'Specialty'
+        )
+
+    return prices_df
+
 def show_live_dashboard(prices_df, trade_df, data_source):
-    """Live dashboard with global data - ENHANCED"""
-    st.header("📊 Global Market Dashboard")  # UPDATED
+    """Enhanced interactive global commodity dashboard"""
+
+    st.header("🌍 Global Market Intelligence Dashboard")
 
     if prices_df.empty:
         st.warning("No price data available")
         return
 
-    # Key metrics - enhanced with global indicators
+    # Enrich data with classifications
+    prices_df = enrich_price_data(prices_df)
+
+    # ======================
+    # SIDEBAR FILTERS
+    # ======================
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📊 Dashboard Filters")
+
+    # Material selection
+    all_materials = sorted(prices_df['material'].unique())
+    default_materials = all_materials[:5] if len(all_materials) > 5 else all_materials
+
+    selected_materials = st.sidebar.multiselect(
+        "🔸 Materials",
+        options=all_materials,
+        default=default_materials,
+        help="Select materials to display"
+    )
+
+    # Region selection
+    all_regions = sorted(prices_df['region'].unique())
+    selected_regions = st.sidebar.multiselect(
+        "🌍 Regions",
+        options=all_regions,
+        default=all_regions,
+        help="Filter by geographic region"
+    )
+
+    # Market type selection
+    all_market_types = sorted(prices_df['market_type'].unique())
+    selected_market_types = st.sidebar.multiselect(
+        "📈 Market Types",
+        options=all_market_types,
+        default=all_market_types,
+        help="Filter by market data source type"
+    )
+
+    # Date range selection
+    min_date = prices_df['date'].min()
+    max_date = prices_df['date'].max()
+
+    # Calculate default date range (last 365 days)
+    default_start = max(min_date, max_date - timedelta(days=365))
+
+    date_range = st.sidebar.date_input(
+        "📅 Date Range",
+        value=(default_start, max_date),
+        min_value=min_date,
+        max_value=max_date,
+        help="Select date range for analysis"
+    )
+
+    # Apply filters
+    filtered_df = prices_df[
+        (prices_df['material'].isin(selected_materials)) &
+        (prices_df['region'].isin(selected_regions)) &
+        (prices_df['market_type'].isin(selected_market_types))
+    ].copy()
+
+    if len(date_range) == 2:
+        start_date, end_date = date_range
+        filtered_df = filtered_df[
+            (filtered_df['date'] >= pd.Timestamp(start_date)) &
+            (filtered_df['date'] <= pd.Timestamp(end_date))
+        ]
+
+    if filtered_df.empty:
+        st.warning("⚠️ No data matches the selected filters. Please adjust your selection.")
+        return
+
+    # ======================
+    # KEY METRICS ROW
+    # ======================
+    st.subheader("📊 Key Performance Indicators")
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    with col1:
+        latest_prices = filtered_df.groupby('material')['price'].last()
+        avg_price = latest_prices.mean()
+        st.metric("Avg Price", f"${avg_price:,.0f}/t", help="Average price across selected materials")
+
+    with col2:
+        if len(filtered_df) > 1:
+            try:
+                price_changes = filtered_df.groupby('material').apply(
+                    lambda x: ((x['price'].iloc[-1] - x['price'].iloc[0]) / x['price'].iloc[0] * 100)
+                    if len(x) > 1 else 0
+                )
+                avg_change = price_changes.mean()
+                st.metric("Period Change", f"{avg_change:+.1f}%",
+                         delta=f"{avg_change:+.1f}%",
+                         delta_color="normal" if avg_change > 0 else "inverse")
+            except:
+                st.metric("Period Change", "N/A")
+        else:
+            st.metric("Period Change", "N/A")
+
+    with col3:
+        materials_count = len(filtered_df['material'].unique())
+        st.metric("Materials", materials_count)
+
+    with col4:
+        regions_count = len(filtered_df['region'].unique())
+        st.metric("Regions", regions_count)
+
+    with col5:
+        data_points = len(filtered_df)
+        st.metric("Data Points", f"{data_points:,}")
+
+    # ======================
+    # MAIN VISUALIZATION TABS
+    # ======================
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📊 Price Trends",
+        "🌍 Regional Analysis",
+        "📈 Market Comparison",
+        "🔍 Material Deep Dive",
+        "📉 Volatility & Risk"
+    ])
+
+    with tab1:
+        show_price_trends_tab(filtered_df)
+
+    with tab2:
+        show_regional_analysis_tab(filtered_df)
+
+    with tab3:
+        show_market_comparison_tab(filtered_df)
+
+    with tab4:
+        show_material_deep_dive_tab(filtered_df)
+
+    with tab5:
+        show_volatility_analysis_tab(filtered_df)
+
+    # ======================
+    # DATA EXPORT & INFO
+    # ======================
+    st.markdown("---")
+
+    col1, col2 = st.columns([2, 1])
+
+    with col1:
+        # Data source summary
+        st.subheader("📊 Data Source Summary")
+
+        source_col1, source_col2, source_col3 = st.columns(3)
+
+        with source_col1:
+            st.markdown("**By Source:**")
+            source_counts = filtered_df['source'].value_counts().head(5)
+            for source, count in source_counts.items():
+                st.caption(f"• {source}: {count:,}")
+
+        with source_col2:
+            st.markdown("**By Region:**")
+            region_counts = filtered_df['region'].value_counts()
+            for region, count in region_counts.items():
+                pct = (count / len(filtered_df)) * 100
+                st.caption(f"• {region}: {pct:.1f}%")
+
+        with source_col3:
+            st.markdown("**By Market:**")
+            market_counts = filtered_df['market_type'].value_counts()
+            for market, count in market_counts.items():
+                st.caption(f"• {market}: {count:,}")
+
+    with col2:
+        # Export options
+        st.subheader("📥 Export Data")
+
+        csv = filtered_df.to_csv(index=False)
+        st.download_button(
+            label="⬇️ Download CSV",
+            data=csv,
+            file_name=f"commodity_data_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+
+        st.metric("Filtered Records", f"{len(filtered_df):,}")
+        st.metric("Date Span", f"{len(filtered_df['date'].unique())} days")
+
+def show_price_trends_tab(filtered_df):
+    """Tab 1: Price Trends"""
+    st.subheader("📈 Historical Price Trends")
+
+    # Visualization controls
+    col1, col2 = st.columns(2)
+
+    with col1:
+        chart_type = st.radio(
+            "Chart Type",
+            ["Line Chart", "Area Chart"],
+            horizontal=True,
+            key="chart_type"
+        )
+
+    with col2:
+        color_by = st.selectbox(
+            "Color/Group By",
+            ["material", "region", "market_type", "source"],
+            index=0,
+            key="color_by"
+        )
+
+    # Create visualization
+    fig = go.Figure()
+
+    for group_value in filtered_df[color_by].unique():
+        group_data = filtered_df[filtered_df[color_by] == group_value].sort_values('date')
+
+        if chart_type == "Line Chart":
+            fig.add_trace(go.Scatter(
+                x=group_data['date'],
+                y=group_data['price'],
+                name=str(group_value),
+                mode='lines',
+                line=dict(width=2),
+                hovertemplate='<b>%{fullData.name}</b><br>' +
+                              'Date: %{x|%b %Y}<br>' +
+                              'Price: $%{y:,.2f}/t<extra></extra>'
+            ))
+        else:  # Area Chart
+            fig.add_trace(go.Scatter(
+                x=group_data['date'],
+                y=group_data['price'],
+                name=str(group_value),
+                mode='lines',
+                fill='tonexty',
+                line=dict(width=1),
+                hovertemplate='<b>%{fullData.name}</b><br>' +
+                              'Date: %{x|%b %Y}<br>' +
+                              'Price: $%{y:,.2f}/t<extra></extra>'
+            ))
+
+    fig.update_layout(
+        title=f"Price Trends by {color_by.replace('_', ' ').title()}",
+        xaxis_title="Date",
+        yaxis_title="Price (USD/t)",
+        hovermode='x unified',
+        height=500,
+        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02)
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Price statistics table
+    st.subheader("📋 Price Statistics")
+
+    stats_df = filtered_df.groupby('material').agg({
+        'price': ['mean', 'min', 'max', 'std', 'count']
+    }).round(2)
+    stats_df.columns = ['Average', 'Minimum', 'Maximum', 'Std Dev', 'Data Points']
+    stats_df = stats_df.reset_index()
+    stats_df['material'] = stats_df['material'].str.title()
+
+    st.dataframe(stats_df, use_container_width=True)
+
+def show_regional_analysis_tab(filtered_df):
+    """Tab 2: Regional Analysis"""
+    st.subheader("🌍 Regional Market Analysis")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Regional price comparison
+        region_stats = filtered_df.groupby('region').agg({
+            'price': ['mean', 'std', 'count']
+        }).reset_index()
+        region_stats.columns = ['Region', 'Avg Price', 'Std Dev', 'Data Points']
+
+        fig_region = px.bar(
+            region_stats,
+            x='Region',
+            y='Avg Price',
+            title="Average Price by Region",
+            color='Region',
+            text='Avg Price',
+            hover_data=['Std Dev', 'Data Points']
+        )
+        fig_region.update_traces(texttemplate='$%{text:,.0f}', textposition='outside')
+        fig_region.update_layout(showlegend=False, height=400)
+        st.plotly_chart(fig_region, use_container_width=True)
+
+    with col2:
+        # Regional material distribution
+        region_material = filtered_df.groupby(['region', 'material']).size().reset_index(name='count')
+
+        fig_sunburst = px.sunburst(
+            region_material,
+            path=['region', 'material'],
+            values='count',
+            title="Material Distribution by Region"
+        )
+        fig_sunburst.update_layout(height=400)
+        st.plotly_chart(fig_sunburst, use_container_width=True)
+
+    # Regional time series comparison
+    st.subheader("📊 Regional Price Trends Comparison")
+
+    selected_material = st.selectbox(
+        "Select Material for Regional Comparison",
+        options=sorted(filtered_df['material'].unique()),
+        key="regional_material"
+    )
+
+    regional_data = filtered_df[filtered_df['material'] == selected_material]
+
+    if not regional_data.empty:
+        fig_trends = px.line(
+            regional_data.sort_values('date'),
+            x='date',
+            y='price',
+            color='region',
+            title=f"{selected_material.title()} Price Trends Across Regions",
+            markers=True
+        )
+        fig_trends.update_layout(height=400, hovermode='x unified')
+        st.plotly_chart(fig_trends, use_container_width=True)
+    else:
+        st.info(f"No regional data available for {selected_material}")
+
+def show_market_comparison_tab(filtered_df):
+    """Tab 3: Market Comparison"""
+    st.subheader("📈 Market Type Comparison")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Box plot by market type
+        fig_box = px.box(
+            filtered_df,
+            x='market_type',
+            y='price',
+            color='market_type',
+            title="Price Distribution by Market Type"
+        )
+        fig_box.update_layout(showlegend=False, height=400)
+        fig_box.update_xaxes(tickangle=45)
+        st.plotly_chart(fig_box, use_container_width=True)
+
+    with col2:
+        # Market coverage heatmap
+        market_coverage = filtered_df.groupby(['market_type', 'material']).size().reset_index(name='coverage')
+
+        fig_heatmap = px.density_heatmap(
+            market_coverage,
+            x='material',
+            y='market_type',
+            z='coverage',
+            title="Market Coverage Heatmap",
+            color_continuous_scale='Viridis'
+        )
+        fig_heatmap.update_layout(height=400)
+        fig_heatmap.update_xaxes(tickangle=45)
+        st.plotly_chart(fig_heatmap, use_container_width=True)
+
+    # Market statistics table
+    st.subheader("📊 Market Statistics")
+
+    market_stats = filtered_df.groupby('market_type').agg({
+        'price': ['mean', 'min', 'max'],
+        'material': 'count'
+    }).reset_index()
+    market_stats.columns = ['Market Type', 'Avg Price', 'Min Price', 'Max Price', 'Records']
+
+    st.dataframe(
+        market_stats.style.format({
+            'Avg Price': '${:,.2f}',
+            'Min Price': '${:,.2f}',
+            'Max Price': '${:,.2f}',
+            'Records': '{:,}'
+        }),
+        use_container_width=True
+    )
+
+def show_material_deep_dive_tab(filtered_df):
+    """Tab 4: Material Deep Dive"""
+    st.subheader("🔍 Material Deep Dive Analysis")
+
+    selected_material = st.selectbox(
+        "Select Material for Detailed Analysis",
+        options=sorted(filtered_df['material'].unique()),
+        key='deep_dive_material'
+    )
+
+    material_data = filtered_df[filtered_df['material'] == selected_material].sort_values('date')
+
+    if material_data.empty:
+        st.warning(f"No data available for {selected_material}")
+        return
+
+    # Statistics summary
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        if 'material' in prices_df.columns and 'price' in prices_df.columns:
-            latest_prices = prices_df.groupby('material')['price'].last()
-            avg_price = latest_prices.mean()
-            st.metric("Average Price", f"${avg_price:,.0f}/t", "Live")
-        else:
-            st.metric("Average Price", "N/A")
+        current_price = material_data['price'].iloc[-1]
+        st.metric("Current Price", f"${current_price:,.2f}/t")
 
     with col2:
-        if len(prices_df) > 1:
-            try:
-                price_change = prices_df.groupby('material').apply(
-                    lambda x: (x['price'].iloc[-1] - x['price'].iloc[-2]) / x['price'].iloc[-2] * 100
-                ).mean()
-                st.metric("Avg Daily Change", f"{price_change:+.1f}%")
-            except:
-                st.metric("Avg Daily Change", "N/A")
+        if len(material_data) > 1:
+            price_change = ((material_data['price'].iloc[-1] - material_data['price'].iloc[0]) /
+                           material_data['price'].iloc[0] * 100)
+            st.metric("Total Change", f"{price_change:+.1f}%",
+                     delta=f"{price_change:+.1f}%")
         else:
-            st.metric("Avg Daily Change", "N/A")
+            st.metric("Total Change", "N/A")
 
     with col3:
-        if 'material' in prices_df.columns:
-            materials_count = len(prices_df['material'].unique())
-            st.metric("Materials Tracked", materials_count)
-        else:
-            st.metric("Materials Tracked", 0)
+        volatility = material_data['price'].std()
+        st.metric("Volatility (Std)", f"${volatility:,.2f}")
 
     with col4:
-        if not prices_df.empty and 'source' in prices_df.columns:
-            # Count unique regions
-            regional_sources = {
-                'US': ['fred', 'etf_', 'futures_'],
-                'Europe': ['ecb', 'lme'],
-                'Global': ['worldbank', 'market_analysis']
-            }
-            regions_covered = []
-            for region, sources in regional_sources.items():
-                if prices_df['source'].str.contains('|'.join(sources), na=False).any():
-                    regions_covered.append(region)
-            st.metric("Regions Covered", len(regions_covered))
+        sources_count = material_data['source'].nunique()
+        st.metric("Data Sources", sources_count)
 
-    # Real-time price trends with source coloring
-    st.subheader("📈 Global Price Trends")
+    # Multi-source comparison
+    st.subheader("📊 All Data Sources")
 
-    if 'material' in prices_df.columns and 'price' in prices_df.columns and 'source' in prices_df.columns:
-        # Show latest prices by material with source info
-        latest = prices_df.sort_values('date').groupby('material').tail(1)
+    fig_sources = px.line(
+        material_data,
+        x='date',
+        y='price',
+        color='source',
+        title=f"{selected_material.title()} - Price by Source",
+        markers=True
+    )
+    fig_sources.update_layout(height=400, hovermode='x unified')
+    st.plotly_chart(fig_sources, use_container_width=True)
 
-        # Add source type for coloring
-        def get_source_type(source):
-            if 'fred' in str(source).lower():
-                return 'US'
-            elif 'ecb' in str(source).lower() or 'lme' in str(source).lower():
-                return 'Europe'
-            elif 'worldbank' in str(source).lower():
-                return 'Global'
-            else:
-                return 'Other'
+    # Distribution and moving averages
+    col1, col2 = st.columns(2)
 
-        latest['source_type'] = latest['source'].apply(get_source_type)
-
-        fig = px.bar(latest, x='material', y='price', color='source_type',
-                    title="Current Prices by Material and Region",
-                    color_discrete_map={'US': '#1f77b4', 'Europe': '#ff7f0e', 'Global': '#2ca02c', 'Other': '#7f7f7f'})
-        st.plotly_chart(fig, use_container_width=True)
-
-        # Price history with enhanced visualization by source
-        st.subheader("📊 Multi-Source Price History")
-
-        # Create price history plot with source differentiation
-        fig = go.Figure()
-
-        # Group by material and source for better visualization
-        for material in prices_df['material'].unique():
-            material_data = prices_df[prices_df['material'] == material]
-
-            # Show different sources with different line styles
-            sources = material_data['source'].unique()
-            for i, source in enumerate(sources):
-                source_data = material_data[material_data['source'] == source]
-                line_style = 'solid' if 'fred' in source else 'dash' if 'ecb' in source else 'dot'
-
-                fig.add_trace(go.Scatter(
-                    x=source_data['date'],
-                    y=source_data['price'],
-                    name=f'{material} ({source})',
-                    line=dict(width=2, dash=line_style),
-                    opacity=0.7
-                ))
-
-        fig.update_layout(
-            title="Historical Price Trends from Multiple Sources",
-            xaxis_title="Date",
-            yaxis_title="Price (USD/t)",
-            hovermode='x unified',
-            height=500
+    with col1:
+        # Price distribution
+        fig_hist = px.histogram(
+            material_data,
+            x='price',
+            nbins=30,
+            title="Price Distribution",
+            marginal="box"
         )
-        st.plotly_chart(fig, use_container_width=True)
+        fig_hist.update_layout(height=350)
+        st.plotly_chart(fig_hist, use_container_width=True)
 
-    # Enhanced data source info
-    if not prices_df.empty and 'source' in prices_df.columns:
-        source_counts = prices_df['source'].value_counts()
-        st.info(f"**Global Data Sources:** {', '.join([f'{k} ({v} recs)' for k, v in source_counts.items()])}")
+    with col2:
+        # Moving averages
+        material_data_sorted = material_data.copy().sort_values('date')
+        material_data_sorted['MA_30'] = material_data_sorted['price'].rolling(window=min(30, len(material_data_sorted)), min_periods=1).mean()
+        material_data_sorted['MA_90'] = material_data_sorted['price'].rolling(window=min(90, len(material_data_sorted)), min_periods=1).mean()
+
+        fig_ma = go.Figure()
+        fig_ma.add_trace(go.Scatter(
+            x=material_data_sorted['date'],
+            y=material_data_sorted['price'],
+            name='Price',
+            line=dict(color='blue', width=1)
+        ))
+        fig_ma.add_trace(go.Scatter(
+            x=material_data_sorted['date'],
+            y=material_data_sorted['MA_30'],
+            name='30-day MA',
+            line=dict(color='orange', width=2)
+        ))
+        fig_ma.add_trace(go.Scatter(
+            x=material_data_sorted['date'],
+            y=material_data_sorted['MA_90'],
+            name='90-day MA',
+            line=dict(color='red', width=2)
+        ))
+        fig_ma.update_layout(title="Moving Averages", height=350, hovermode='x unified')
+        st.plotly_chart(fig_ma, use_container_width=True)
+
+def show_volatility_analysis_tab(filtered_df):
+    """Tab 5: Volatility & Risk Analysis"""
+    st.subheader("📉 Volatility & Risk Analysis")
+
+    # Calculate volatility metrics
+    volatility_data = []
+
+    for material in filtered_df['material'].unique():
+        mat_data = filtered_df[filtered_df['material'] == material].sort_values('date')
+
+        if len(mat_data) > 1:
+            returns = mat_data['price'].pct_change().dropna()
+            volatility = returns.std() * np.sqrt(252)  # Annualized
+
+            volatility_data.append({
+                'material': material,
+                'volatility': volatility * 100,
+                'avg_price': mat_data['price'].mean(),
+                'price_range': mat_data['price'].max() - mat_data['price'].min(),
+                'data_points': len(mat_data)
+            })
+
+    vol_df = pd.DataFrame(volatility_data)
+
+    if not vol_df.empty:
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Volatility bar chart
+            fig_vol = px.bar(
+                vol_df.sort_values('volatility', ascending=False),
+                x='material',
+                y='volatility',
+                title="Annualized Volatility by Material",
+                color='volatility',
+                color_continuous_scale='Reds',
+                text='volatility'
+            )
+            fig_vol.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+            fig_vol.update_layout(height=400)
+            st.plotly_chart(fig_vol, use_container_width=True)
+
+        with col2:
+            # Risk-return scatter
+            fig_scatter = px.scatter(
+                vol_df,
+                x='avg_price',
+                y='volatility',
+                size='price_range',
+                color='material',
+                title="Risk-Return Profile",
+                labels={'avg_price': 'Average Price (USD/t)', 'volatility': 'Volatility (%)'},
+                hover_data=['data_points']
+            )
+            fig_scatter.update_layout(height=400)
+            st.plotly_chart(fig_scatter, use_container_width=True)
+
+        # Volatility table
+        st.subheader("📊 Volatility Metrics")
+
+        display_vol = vol_df.copy()
+        display_vol['material'] = display_vol['material'].str.title()
+        display_vol = display_vol.sort_values('volatility', ascending=False)
+
+        st.dataframe(
+            display_vol.style.format({
+                'volatility': '{:.2f}%',
+                'avg_price': '${:,.2f}',
+                'price_range': '${:,.2f}',
+                'data_points': '{:,}'
+            }).background_gradient(subset=['volatility'], cmap='RdYlGn_r'),
+            use_container_width=True
+        )
+
+        # Risk interpretation
+        st.subheader("⚠️ Risk Interpretation")
+
+        high_vol_materials = vol_df[vol_df['volatility'] > vol_df['volatility'].quantile(0.75)]['material'].tolist()
+        low_vol_materials = vol_df[vol_df['volatility'] < vol_df['volatility'].quantile(0.25)]['material'].tolist()
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if high_vol_materials:
+                st.warning(f"**High Volatility Materials:**")
+                for mat in high_vol_materials:
+                    st.write(f"• {mat.title()} - Consider hedging strategies")
+
+        with col2:
+            if low_vol_materials:
+                st.success(f"**Low Volatility Materials:**")
+                for mat in low_vol_materials:
+                    st.write(f"• {mat.title()} - Stable pricing environment")
+    else:
+        st.info("Insufficient data for volatility analysis")
 
 def show_enhanced_forecasting(prices_df, data_source, use_enhanced_forecasting=True):
     """Enhanced forecasting with fundamental adjustments"""
