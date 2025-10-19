@@ -97,7 +97,7 @@ class BaselineForecaster:
         Parameters
         ----------
         prices_df : pd.DataFrame
-            DataFrame with columns: date, material, price_usd
+            DataFrame with columns: date, material, price
         material : str
             Material name to forecast
         use_fundamentals : bool, optional
@@ -177,7 +177,7 @@ class BaselineForecaster:
         Parameters
         ----------
         prices_df : pd.DataFrame
-            DataFrame with columns: date, material, price_usd
+            DataFrame with columns: date, material, price
         material : str
             Material name to forecast
 
@@ -322,43 +322,43 @@ class BaselineForecaster:
         df = df.drop_duplicates(subset=['date'], keep='last')
 
         # Handle missing values
-        if df['price_usd'].isnull().any():
-            logger.warning(f"Found {df['price_usd'].isnull().sum()} missing prices, interpolating...")
-            df['price_usd'] = df['price_usd'].interpolate(method='linear')
+        if df['price'].isnull().any():
+            logger.warning(f"Found {df['price'].isnull().sum()} missing prices, interpolating...")
+            df['price'] = df['price'].interpolate(method='linear')
 
         return df
 
     def _calculate_rolling_stats(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculate rolling mean and standard deviation"""
         # Rolling mean
-        df['rolling_mean'] = df['price_usd'].rolling(
+        df['rolling_mean'] = df['price'].rolling(
             window=self.window,
             min_periods=max(1, self.window // 2)
         ).mean()
 
         # Rolling standard deviation
-        df['rolling_std'] = df['price_usd'].rolling(
+        df['rolling_std'] = df['price'].rolling(
             window=self.window,
             min_periods=max(1, self.window // 2)
         ).std()
 
         # Rolling median (more robust to outliers)
-        df['rolling_median'] = df['price_usd'].rolling(
+        df['rolling_median'] = df['price'].rolling(
             window=self.window,
             min_periods=max(1, self.window // 2)
         ).median()
 
         # Fill initial NaNs with expanding window
         df['rolling_mean'].fillna(
-            df['price_usd'].expanding().mean(),
+            df['price'].expanding().mean(),
             inplace=True
         )
         df['rolling_std'].fillna(
-            df['price_usd'].expanding().std(),
+            df['price'].expanding().std(),
             inplace=True
         )
         df['rolling_median'].fillna(
-            df['price_usd'].expanding().median(),
+            df['price'].expanding().median(),
             inplace=True
         )
 
@@ -387,7 +387,7 @@ class BaselineForecaster:
     def _calculate_momentum(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculate momentum indicators"""
         # Simple momentum (3-month rate of change)
-        df['momentum_3m'] = df['price_usd'].pct_change(periods=3)
+        df['momentum_3m'] = df['price'].pct_change(periods=3)
 
         # Z-score of momentum (standardized)
         df['momentum_zscore'] = (
@@ -405,14 +405,14 @@ class BaselineForecaster:
     def _detect_trend(self, df: pd.DataFrame) -> pd.DataFrame:
         """Detect price trend using multiple indicators"""
         # Simple Moving Average crossover
-        df['sma_short'] = df['price_usd'].rolling(window=3).mean()
-        df['sma_long'] = df['price_usd'].rolling(window=12).mean()
+        df['sma_short'] = df['price'].rolling(window=3).mean()
+        df['sma_long'] = df['price'].rolling(window=12).mean()
 
         # Price relative to moving average
-        df['price_vs_ma'] = (df['price_usd'] - df['rolling_mean']) / df['rolling_mean']
+        df['price_vs_ma'] = (df['price'] - df['rolling_mean']) / df['rolling_mean']
 
         # Linear regression trend
-        df['trend_strength'] = df['price_usd'].rolling(
+        df['trend_strength'] = df['price'].rolling(
             window=self.window
         ).apply(self._calculate_trend_strength, raw=False)
 
@@ -453,7 +453,7 @@ class BaselineForecaster:
         """Generate future forecasts with confidence intervals"""
         # Get last available values
         last_date = df['date'].iloc[-1]
-        last_price = df['price_usd'].iloc[-1]
+        last_price = df['price'].iloc[-1]
         last_mean = df['rolling_mean'].iloc[-1]
         last_std = df['rolling_std'].iloc[-1]
         last_momentum_z = df['momentum_zscore'].iloc[-1]
@@ -536,7 +536,7 @@ class BaselineForecaster:
         recent_df = df.tail(self.window)
 
         # Current values
-        current_price = df['price_usd'].iloc[-1]
+        current_price = df['price'].iloc[-1]
         current_mean = df['rolling_mean'].iloc[-1]
         current_std = df['rolling_std'].iloc[-1]
         current_cv = df['volatility_cv'].iloc[-1]
@@ -545,9 +545,9 @@ class BaselineForecaster:
         current_trend = df['trend'].iloc[-1]
 
         # Historical statistics
-        avg_price = recent_df['price_usd'].mean()
-        min_price = recent_df['price_usd'].min()
-        max_price = recent_df['price_usd'].max()
+        avg_price = recent_df['price'].mean()
+        min_price = recent_df['price'].min()
+        max_price = recent_df['price'].max()
         price_range = max_price - min_price
 
         # Price position in range
@@ -560,7 +560,7 @@ class BaselineForecaster:
         trend_strength = recent_df['trend_strength'].mean()
 
         # Recent volatility
-        recent_volatility = recent_df['price_usd'].pct_change().std()
+        recent_volatility = recent_df['price'].pct_change().std()
 
         # Price velocity (rate of change)
         price_velocity = (current_price - avg_price) / avg_price if avg_price != 0 else 0
@@ -585,10 +585,10 @@ class BaselineForecaster:
     def _assess_data_quality(self, df: pd.DataFrame) -> Dict:
         """Assess data quality metrics"""
         total_points = len(df)
-        missing_points = df['price_usd'].isnull().sum()
+        missing_points = df['price'].isnull().sum()
 
         # Check for outliers (prices > 3 std from mean)
-        z_scores = np.abs(stats.zscore(df['price_usd'].dropna()))
+        z_scores = np.abs(stats.zscore(df['price'].dropna()))
         outliers = (z_scores > 3).sum()
 
         # Data completeness
@@ -645,7 +645,7 @@ class BaselineForecaster:
 
         # Generate forecast on training data
         result = self.fit_predict(
-            train_df.rename(columns={'price_usd': 'price_usd'}),
+            train_df.rename(columns={'price': 'price'}),
             material,
             use_fundamentals=use_fundamentals
         )
@@ -654,7 +654,7 @@ class BaselineForecaster:
         # Compare forecasts to actuals
         errors = []
         for idx, row in test_df.iterrows():
-            actual = row['price_usd']
+            actual = row['price']
             forecast_row = forecast[forecast['horizon'] == (idx - len(train_df) + 1)]
 
             if len(forecast_row) > 0:
@@ -680,7 +680,7 @@ class BaselineForecaster:
 
         # Direction accuracy (did we get the trend right?)
         if len(errors_df) > 1:
-            actual_direction = (test_df['price_usd'].diff() > 0).iloc[1:]
+            actual_direction = (test_df['price'].diff() > 0).iloc[1:]
             predicted_direction = (errors_df['predicted'].diff() > 0).iloc[1:]
             direction_accuracy = (actual_direction == predicted_direction).mean()
         else:
@@ -773,7 +773,7 @@ class BaselineForecaster:
 
         if include_historical:
             historical_df = forecast_result['historical'][
-                ['date', 'price_usd', 'rolling_mean', 'rolling_std', 'trend']
+                ['date', 'price', 'rolling_mean', 'rolling_std', 'trend']
             ]
             historical_df['is_forecast'] = False
 
@@ -781,7 +781,7 @@ class BaselineForecaster:
             if 'fundamental_adjustment_factor' in forecast_export.columns:
                 forecast_export['fundamental_adjustment'] = forecast_export['fundamental_adjustment_factor']
 
-            forecast_export.columns = ['date', 'price_usd', 'lower_bound', 'upper_bound']
+            forecast_export.columns = ['date', 'price', 'lower_bound', 'upper_bound']
             forecast_export['is_forecast'] = True
 
             combined = pd.concat([historical_df, forecast_export], ignore_index=True)
