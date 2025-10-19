@@ -283,7 +283,7 @@ def fetch_real_data():
             else:
                 st.success(f"✅ Loaded {len(prices_df)} price records")
 
-            # Show regional breakdown
+            # Show regional breakdown - FIXED THE SUM ERROR
             if 'source' in prices_df.columns:
                 regional_sources = {
                     'US': ['fred', 'etf_', 'futures_'],
@@ -293,7 +293,8 @@ def fetch_real_data():
 
                 regional_counts = {}
                 for region, sources in regional_sources.items():
-                    count = sum(prices_df['source'].str.contains('|'.join(sources)).sum())
+                    # FIXED: Remove the outer sum() - .sum() already returns the count
+                    count = prices_df['source'].str.contains('|'.join(sources), na=False).sum()
                     if count > 0:
                         regional_counts[region] = count
 
@@ -304,6 +305,8 @@ def fetch_real_data():
             return pd.DataFrame(), pd.DataFrame(), "error"
     except Exception as e:
         st.error(f"❌ Price data fetch failed: {e}")
+        import traceback
+        st.error(f"Detailed error: {traceback.format_exc()}")
         return pd.DataFrame(), pd.DataFrame(), "error"
 
     # Fetch trade data
@@ -403,7 +406,7 @@ def show_data_sources(config, prices_df, trade_df, data_source):
 
             regional_counts = {}
             for region, sources in regional_map.items():
-                count = sum(prices_df['source'].str.contains('|'.join(sources)).sum())
+                count = prices_df['source'].str.contains('|'.join(sources), na=False).sum()
                 regional_counts[region] = count
 
             st.markdown("**Regional Distribution:**")
@@ -560,7 +563,7 @@ def show_live_dashboard(prices_df, trade_df, data_source):
             }
             regions_covered = []
             for region, sources in regional_sources.items():
-                if any(prices_df['source'].str.contains('|'.join(sources)).any()):
+                if prices_df['source'].str.contains('|'.join(sources), na=False).any():
                     regions_covered.append(region)
             st.metric("Regions Covered", len(regions_covered))
 
