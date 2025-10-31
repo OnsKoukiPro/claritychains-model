@@ -1,4 +1,3 @@
-
 services:
   critical-materials-app:
     build:
@@ -11,21 +10,25 @@ services:
       - ./config:/app/config
       - ./logs:/app/logs
       - ./cache:/app/cache
+      - ./app:/app/app  # Mount app directory for development
+      - ./src:/app/src  # Mount src directory for development
     environment:
       - STREAMLIT_SERVER_PORT=8501
       - STREAMLIT_SERVER_ADDRESS=0.0.0.0
       - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
-      - PYTHONPATH=/app/src
+      - PYTHONPATH=/app:/app/src
       - DATA_DIR=/app/data
       - CONFIG_DIR=/app/config
     env_file:
       - .env
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8501/healthz"]
+      test: ["CMD", "curl", "-f", "http://localhost:8501"]
       interval: 30s
       timeout: 10s
       retries: 3
+    labels:
+      - "description=Critical Materials AI Platform - Global Enhanced"
 
   # Data pipeline service (optional - for scheduled data updates)
   data-pipeline:
@@ -35,12 +38,15 @@ services:
     volumes:
       - ./data:/app/data
       - ./config:/app/config
+      - ./src:/app/src  # Mount src for data pipeline modules
     environment:
-      - PYTHONPATH=/app/src
+      - PYTHONPATH=/app:/app/src
     env_file:
       - .env
     command: ["python", "scripts/fetch_all_data.py"]
     restart: "no"
+    labels:
+      - "description=Data pipeline for fetching commodity data"
 
   # Jupyter notebook service for analysis
   jupyter:
@@ -53,11 +59,19 @@ services:
       - ./notebooks:/app/notebooks
       - ./data:/app/data
       - ./src:/app/src
+      - ./app:/app/app
     environment:
       - JUPYTER_PORT=8888
-    command: ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--NotebookApp.token=''"]
+      - PYTHONPATH=/app:/app/src
+    command: ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--NotebookApp.token=''", "--NotebookApp.password=''"]
     restart: unless-stopped
+    labels:
+      - "description=Jupyter Lab for data analysis"
 
 volumes:
   data_volume:
   logs_volume:
+
+networks:
+  default:
+    name: critical-materials-network
