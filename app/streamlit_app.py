@@ -414,8 +414,6 @@ def main():
     # Show import status
     if GlobalCommodityFetcher is None:
         st.error("⚠️ GlobalCommodityFetcher not available - data sourcing limited")
-    else:
-        st.sidebar.success("✅ GlobalCommodityFetcher loaded")
 
     if BaselineForecaster is None:
         st.warning("⚠️ Enhanced forecasting limited - some features may not work properly")
@@ -556,49 +554,54 @@ def show_live_dashboard(prices_df, trade_df, data_source):
     prices_df = enrich_price_data(prices_df)
 
     # ======================
-    # SIDEBAR FILTERS
+    # MAIN FRAME FILTERS - MOVED FROM SIDEBAR
     # ======================
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("📊 Dashboard Filters")
+    st.subheader("🔍 Data Filters")
 
-    # Material selection
-    all_materials = sorted(prices_df['material'].unique())
-    default_materials = all_materials[:5] if len(all_materials) > 5 else all_materials
+    # Create columns for filters
+    col1, col2, col3 = st.columns(3)
 
-    selected_materials = st.sidebar.multiselect(
-        "🔸 Materials",
-        options=all_materials,
-        default=default_materials,
-        help="Select materials to display"
-    )
+    with col1:
+        # Material selection
+        all_materials = sorted(prices_df['material'].unique())
+        default_materials = all_materials[:5] if len(all_materials) > 5 else all_materials
+        selected_materials = st.multiselect(
+            "🔸 Materials",
+            options=all_materials,
+            default=default_materials,
+            help="Select materials to display"
+        )
 
-    # Region selection
-    all_regions = sorted(prices_df['region'].unique())
-    selected_regions = st.sidebar.multiselect(
-        "🌍 Regions",
-        options=all_regions,
-        default=all_regions,
-        help="Filter by geographic region"
-    )
+    with col2:
+        # Region selection
+        all_regions = sorted(prices_df['region'].unique())
+        selected_regions = st.multiselect(
+            "🌍 Regions",
+            options=all_regions,
+            default=all_regions,
+            help="Filter by geographic region"
+        )
 
-    # Market type selection
-    all_market_types = sorted(prices_df['market_type'].unique())
-    selected_market_types = st.sidebar.multiselect(
-        "📈 Market Types",
-        options=all_market_types,
-        default=all_market_types,
-        help="Filter by market data source type"
-    )
+    with col3:
+        # Market type selection
+        all_market_types = sorted(prices_df['market_type'].unique())
+        selected_market_types = st.multiselect(
+            "📈 Market Types",
+            options=all_market_types,
+            default=all_market_types,
+            help="Filter by market data source type"
+        )
 
-    # Date range selection
+    # Date range selection in its own row
+    st.subheader("📅 Time Period")
     min_date = prices_df['date'].min()
     max_date = prices_df['date'].max()
 
     # Calculate default date range (last 365 days)
     default_start = max(min_date, max_date - timedelta(days=365))
 
-    date_range = st.sidebar.date_input(
-        "📅 Date Range",
+    date_range = st.date_input(
+        "Select Date Range",
         value=(default_start, max_date),
         min_value=min_date,
         max_value=max_date,
