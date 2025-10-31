@@ -257,72 +257,42 @@ def fetch_real_data():
     data_dir = Path(config['paths']['raw_data'])
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    # Test data libraries first
-    st.info("🔧 Testing Python data libraries...")
+    # Test data libraries first - REMOVED STREAMLIT MESSAGES
     try:
         lib_success, lib_message = trade_fetcher.test_data_availability()
-        if lib_success:
-            st.success(f"✅ {lib_message}")
-        else:
-            st.error(f"❌ {lib_message}")
-            st.info("Using statistical data sources instead...")
+        if not lib_success:
+            logger.warning(f"Data availability test failed: {lib_message}")
     except Exception as e:
-        st.warning(f"Data availability test failed: {e}")
+        logger.warning(f"Data availability test failed: {e}")
 
-    # Fetch price data - ENHANCED SOURCE DESCRIPTION
-    st.info("🌍 Fetching price data from global sources (FRED, ECB, World Bank, LME)...")
+    # Fetch price data - REMOVED STREAMLIT MESSAGES
     try:
         prices_df = price_fetcher.fetch_all_prices()
 
         if not prices_df.empty:
             prices_df.to_csv(data_dir / "real_prices.csv", index=False)
-            if 'source' in prices_df.columns:
-                source_counts = prices_df['source'].value_counts()
-                source_info = ", ".join([f"{k} ({v} recs)" for k, v in source_counts.items()])
-                st.success(f"✅ Loaded {len(prices_df)} price records from: {source_info}")
-            else:
-                st.success(f"✅ Loaded {len(prices_df)} price records")
-
-            # Show regional breakdown - FIXED THE SUM ERROR
-            if 'source' in prices_df.columns:
-                regional_sources = {
-                    'US': ['fred', 'etf_', 'futures_'],
-                    'Europe': ['ecb', 'lme'],
-                    'Global': ['worldbank', 'market_analysis']
-                }
-
-                regional_counts = {}
-                for region, sources in regional_sources.items():
-                    # FIXED: Remove the outer sum() - .sum() already returns the count
-                    count = prices_df['source'].str.contains('|'.join(sources), na=False).sum()
-                    if count > 0:
-                        regional_counts[region] = count
-
-                if regional_counts:
-                    st.info(f"**Regional Coverage:** {', '.join([f'{k}: {v} recs' for k, v in regional_counts.items()])}")
+            logger.info(f"Loaded {len(prices_df)} price records")
         else:
-            st.error("❌ Could not load any price data")
+            logger.error("Could not load any price data")
             return pd.DataFrame(), pd.DataFrame(), "error"
     except Exception as e:
-        st.error(f"❌ Price data fetch failed: {e}")
+        logger.error(f"Price data fetch failed: {e}")
         import traceback
-        st.error(f"Detailed error: {traceback.format_exc()}")
+        logger.error(f"Detailed error: {traceback.format_exc()}")
         return pd.DataFrame(), pd.DataFrame(), "error"
 
-    # Fetch trade data
-    st.info("🌍 Fetching trade data from USGS and World Bank...")
+    # Fetch trade data - REMOVED STREAMLIT MESSAGES
     try:
         trade_df = trade_fetcher.fetch_simplified_trade_flows(years=[2025])
 
         if not trade_df.empty:
             trade_df.to_csv(data_dir / "real_trade_flows.csv", index=False)
-            source_info = ", ".join(trade_df['source'].unique()) if 'source' in trade_df.columns else "Unknown"
-            st.success(f"✅ Loaded {len(trade_df)} trade records from: {source_info}")
+            logger.info(f"Loaded {len(trade_df)} trade records")
         else:
-            st.error("❌ Could not load any trade data")
+            logger.error("Could not load any trade data")
             return pd.DataFrame(), pd.DataFrame(), "error"
     except Exception as e:
-        st.error(f"❌ Trade data fetch failed: {e}")
+        logger.error(f"Trade data fetch failed: {e}")
         return pd.DataFrame(), pd.DataFrame(), "error"
 
     return prices_df, trade_df, "real"
@@ -344,7 +314,7 @@ def load_data():
             trade_df = pd.read_csv(real_trade_path)
             return prices_df, trade_df, "real"
         except Exception as e:
-            st.warning(f"Error loading saved data: {e}")
+            logger.warning(f"Error loading saved data: {e}")
 
     # Only fetch real data - no sample fallback
     return fetch_real_data()
@@ -514,6 +484,9 @@ def main():
 
     with tab7:
         show_data_sources(load_config(), prices_df, trade_df, data_source)
+
+# ... (rest of your functions remain exactly the same - show_live_dashboard, show_enhanced_forecasting, etc.)
+# All the other functions from show_live_dashboard to the end of the file remain unchanged
 
 def classify_data_source(source):
     """Classify data source by region and type"""
@@ -1341,9 +1314,6 @@ def show_enhanced_forecasting(prices_df, data_source, use_enhanced_forecasting=T
         - ⚡ Volatility regimes indicate market stability
         """)
 
-# ... (keep the rest of your functions exactly as they were - show_ev_adoption_analysis, show_geopolitical_risk, etc.)
-# The remaining functions can stay exactly the same as in your previous code
-
 def show_ev_adoption_analysis():
     """Enhanced EV adoption analysis tab"""
     st.header("🚗 EV Adoption & Demand Impact")
@@ -1555,8 +1525,6 @@ def show_geopolitical_risk():
     except Exception as e:
         st.error(f"Geopolitical risk analysis failed: {e}")
         logger.error(f"Geopolitical risk analysis error: {e}")
-
-# ... (keep the remaining functions exactly as they were)
 
 def show_procurement_analysis(prices_df):
     """Procurement analysis with real data and editable plans"""
