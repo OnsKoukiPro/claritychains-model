@@ -18,7 +18,7 @@ services:
       - PYTHONPATH=/app/src
       - DATA_DIR=/app/data
       - CONFIG_DIR=/app/config
-      - AGENT_API_URL=http://agent-api:8000
+      - AGENT_API_URL=http://localhost:8000
     env_file:
       - .env
     restart: unless-stopped

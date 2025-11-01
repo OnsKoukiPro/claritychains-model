@@ -463,27 +463,28 @@ def main():
     ])
 
     with tab1:
+        show_ai_offer_analysis()
+    with tab2:
         show_live_dashboard(prices_df, trade_df, data_source)
 
-    with tab2:
+    with tab3:
         show_enhanced_forecasting(prices_df, data_source, use_enhanced_forecasting)
 
-    with tab3:
+    with tab4:
         show_ev_adoption_analysis()
 
-    with tab4:
+    with tab5:
         show_geopolitical_risk()
 
-    with tab5:
+    with tab6:
         show_procurement_analysis(prices_df)
 
-    with tab6:
+    with tab7:
         show_supply_chain_analysis(trade_df)
 
-    with tab7:
-        show_data_sources(load_config(), prices_df, trade_df, data_source)
     with tab8:
-        show_ai_offer_analysis()
+        show_data_sources(load_config(), prices_df, trade_df, data_source)
+
 
 def classify_data_source(source):
     """Classify data source by region and type"""
@@ -2032,10 +2033,6 @@ def show_data_sources(config, prices_df, trade_df, data_source):
         st.write(f"**EVAdoptionFetcher:** {'✅ Available' if EVAdoptionFetcher is not None else '❌ Not Available'}")
     with status_col3:
         st.write(f"**GDELTFetcher:** {'✅ Available' if GDELTFetcher is not None else '❌ Not Available'}")
-
-"""
-Add this to your streamlit_app.py main() function as a new tab
-"""
 
 def show_ai_offer_analysis():
     """AI-powered procurement offer analysis"""

@@ -350,7 +350,7 @@ debug:
 
 agent:
   enabled: true
-  api_url: "http://agent-api:8000"
+  api_url: "http://localhost:8000"
   default_weights:
     tco: 25
     payment_terms: 10

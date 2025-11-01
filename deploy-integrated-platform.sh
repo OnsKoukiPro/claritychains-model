@@ -157,7 +157,7 @@ YAHOO_FINANCE_FREE=true
 # Agent API settings (REQUIRED for AI analysis)
 OPENAI_API_KEY=your_openai_key_here
 GEMINI_API_KEY=your_gemini_key_here
-AGENT_API_URL=http://agent-api:8000
+AGENT_API_URL=http://localhost:8000
 EOF
     echo "⚠️  Created .env file - PLEASE ADD YOUR API KEYS!"
     echo "    Edit .env and add your OpenAI or Gemini API key"
@@ -185,7 +185,7 @@ materials:
 
 agent:
   enabled: true
-  api_url: "http://agent-api:8000"
+  api_url: "http://localhost:8000"
   default_weights:
     tco: 25
     payment_terms: 10
