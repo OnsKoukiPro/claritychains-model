@@ -457,9 +457,9 @@ def main():
         st.sidebar.info("Enable 'Use Real API Data' for live global data")
 
     # Enhanced main tabs with global focus
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-        "📊 Global Dashboard", "📈 Enhanced Forecasting", "🚗 EV Adoption",  # UPDATED
-        "🌍 Geopolitical Risk", "💳 Procurement", "🔗 Supply Chain", "🌐 Data Sources"  # UPDATED
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+        "🤖 Clare AI Offer Analysis", "📊 Global Dashboard", "📈 Enhanced Forecasting", "🚗 EV Adoption",  # UPDATED
+        "🌍 Geopolitical Risk", "💳 Procurement", "🔗 Supply Chain", "🌐 Data Sources",   # UPDATED
     ])
 
     with tab1:
@@ -482,9 +482,8 @@ def main():
 
     with tab7:
         show_data_sources(load_config(), prices_df, trade_df, data_source)
-
-# ... (rest of your functions remain exactly the same - show_live_dashboard, show_enhanced_forecasting, etc.)
-# All the other functions from show_live_dashboard to the end of the file remain unchanged
+    with tab8:
+        show_ai_offer_analysis()
 
 def classify_data_source(source):
     """Classify data source by region and type"""
@@ -2033,6 +2032,342 @@ def show_data_sources(config, prices_df, trade_df, data_source):
         st.write(f"**EVAdoptionFetcher:** {'✅ Available' if EVAdoptionFetcher is not None else '❌ Not Available'}")
     with status_col3:
         st.write(f"**GDELTFetcher:** {'✅ Available' if GDELTFetcher is not None else '❌ Not Available'}")
+
+"""
+Add this to your streamlit_app.py main() function as a new tab
+"""
+
+def show_ai_offer_analysis():
+    """AI-powered procurement offer analysis"""
+    st.header("🤖 AI Offer Analysis & Chat")
+
+    st.markdown("""
+    Upload multiple supplier offers for AI-powered comparative analysis.
+    The AI agent will:
+    - Extract and normalize data from documents
+    - Score offers based on configurable weights
+    - Provide recommendations and answer questions
+    """)
+
+    # Import agent client
+    try:
+        from src.utils.agent_client import get_agent_client
+        agent = get_agent_client()
+
+        # Check if agent is available
+        if not agent.health_check():
+            st.error("❌ AI Agent API is not available. Please ensure the agent-api service is running.")
+            st.info("Start the agent with: `docker-compose up agent-api`")
+            return
+
+        st.success("✅ AI Agent is ready")
+
+    except ImportError:
+        st.error("❌ Agent client not available. Please check installation.")
+        return
+
+    # Initialize session state
+    if 'offers_staged' not in st.session_state:
+        st.session_state.offers_staged = []
+    if 'analysis_result' not in st.session_state:
+        st.session_state.analysis_result = None
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+
+    # Create tabs for different functions
+    upload_tab, analyze_tab, chat_tab = st.tabs([
+        "📤 Upload Offers",
+        "📊 Analysis & Ranking",
+        "💬 AI Chat"
+    ])
+
+    # ===== UPLOAD TAB =====
+    with upload_tab:
+        st.subheader("Upload Supplier Offers")
+
+        st.info("""
+        **Supported formats:** PDF, DOCX, TXT, CSV, Excel
+
+        Upload all documents for a single offer, then click "Add Offer" before uploading the next offer.
+        """)
+
+        uploaded_files = st.file_uploader(
+            "Select offer documents",
+            accept_multiple_files=True,
+            type=['pdf', 'docx', 'txt', 'csv', 'xlsx', 'xls'],
+            key='offer_uploader'
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button("➕ Add This Offer", type="primary", disabled=not uploaded_files):
+                if uploaded_files:
+                    with st.spinner("Adding offer..."):
+                        # Save files temporarily
+                        import tempfile
+                        temp_files = []
+
+                        for uploaded_file in uploaded_files:
+                            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=uploaded_file.name)
+                            temp_file.write(uploaded_file.getvalue())
+                            temp_file.close()
+                            temp_files.append(temp_file.name)
+
+                        # Add to agent
+                        result = agent.add_offer(temp_files)
+
+                        if 'error' not in result:
+                            st.session_state.offers_staged.append({
+                                'files': [f.name for f in uploaded_files],
+                                'count': len(uploaded_files)
+                            })
+                            st.success(f"✅ Offer {len(st.session_state.offers_staged)} added successfully!")
+                            st.rerun()
+                        else:
+                            st.error(f"Failed to add offer: {result['error']}")
+
+        with col2:
+            if st.button("🗑️ Clear All Offers"):
+                st.session_state.offers_staged = []
+                st.session_state.analysis_result = None
+                st.session_state.chat_history = []
+                st.rerun()
+
+        # Show staged offers
+        if st.session_state.offers_staged:
+            st.subheader(f"📋 Staged Offers ({len(st.session_state.offers_staged)})")
+
+            for i, offer in enumerate(st.session_state.offers_staged):
+                with st.expander(f"Offer {i+1} - {offer['count']} file(s)"):
+                    for filename in offer['files']:
+                        st.text(f"• {filename}")
+        else:
+            st.info("No offers staged yet. Upload documents and click 'Add This Offer'.")
+
+    # ===== ANALYSIS TAB =====
+    with analyze_tab:
+        st.subheader("Configure Analysis & Run")
+
+        if not st.session_state.offers_staged:
+            st.warning("⚠️ Please add at least one offer in the Upload tab first.")
+        else:
+            st.success(f"Ready to analyze {len(st.session_state.offers_staged)} offers")
+
+            # Evaluation criteria
+            eval_criteria = st.text_area(
+                "Additional Evaluation Criteria (optional)",
+                placeholder="e.g., Prioritize suppliers with ISO certifications and shorter lead times",
+                help="Provide any specific requirements or preferences"
+            )
+
+            # Configure weights
+            st.subheader("⚖️ Configure Analysis Weights")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                tco_weight = st.slider("Total Cost of Ownership", 0, 50, 25, 5)
+                payment_terms_weight = st.slider("Payment Terms", 0, 30, 10, 5)
+                price_stability_weight = st.slider("Price Stability", 0, 20, 5, 5)
+                lead_time_weight = st.slider("Lead Time", 0, 40, 20, 5)
+
+            with col2:
+                tech_spec_weight = st.slider("Technical Specifications", 0, 50, 25, 5)
+                certifications_weight = st.slider("Certifications", 0, 20, 5, 5)
+                incoterms_weight = st.slider("Incoterms", 0, 20, 5, 5)
+                warranty_weight = st.slider("Warranty", 0, 20, 5, 5)
+
+            total_weight = (tco_weight + payment_terms_weight + price_stability_weight +
+                          lead_time_weight + tech_spec_weight + certifications_weight +
+                          incoterms_weight + warranty_weight)
+
+            st.info(f"Total weight: {total_weight} (will be normalized to 100%)")
+
+            if st.button("🚀 Analyze Offers", type="primary"):
+                with st.spinner("🤖 AI is analyzing your offers... This may take 1-2 minutes..."):
+                    weights = {
+                        "tco_weight": tco_weight,
+                        "payment_terms_weight": payment_terms_weight,
+                        "price_stability_weight": price_stability_weight,
+                        "lead_time_weight": lead_time_weight,
+                        "tech_spec_weight": tech_spec_weight,
+                        "certifications_weight": certifications_weight,
+                        "incoterms_weight": incoterms_weight,
+                        "warranty_weight": warranty_weight
+                    }
+
+                    result = agent.analyze_offers(eval_criteria, weights)
+
+                    if 'error' not in result:
+                        st.session_state.analysis_result = result
+                        st.success("✅ Analysis complete!")
+                        st.rerun()
+                    else:
+                        st.error(f"Analysis failed: {result['error']}")
+
+            # Display results if available
+            if st.session_state.analysis_result:
+                st.markdown("---")
+                st.subheader("📊 Analysis Results")
+
+                analysis = st.session_state.analysis_result.get('analysis', [])
+
+                if analysis:
+                    # Create ranking dataframe
+                    ranking_data = []
+                    for i, offer in enumerate(analysis):
+                        ranking_data.append({
+                            'Rank': i + 1,
+                            'Offer': f"Offer {offer.get('offer_number', i+1)}",
+                            'Score': float(offer.get('total_weighted_score', 0)),
+                            'Recommendation': offer.get('recommendation', 'N/A'),
+                            'TCO': offer.get('scores', {}).get('Total Cost of Ownership (TCO)', 'N/A'),
+                            'Lead Time': offer.get('scores', {}).get('Lead Time', 'N/A'),
+                            'Tech Specs': offer.get('scores', {}).get('Technical Specifications', 'N/A')
+                        })
+
+                    ranking_df = pd.DataFrame(ranking_data)
+
+                    # Highlight best offer
+                    def highlight_best(row):
+                        if row['Recommendation'] == 'Best Offer':
+                            return ['background-color: #90EE90'] * len(row)
+                        return [''] * len(row)
+
+                    st.dataframe(
+                        ranking_df.style.apply(highlight_best, axis=1),
+                        use_container_width=True
+                    )
+
+                    # Detailed view
+                    st.subheader("📋 Detailed Analysis")
+
+                    for offer in analysis:
+                        offer_num = offer.get('offer_number', 'Unknown')
+                        recommendation = offer.get('recommendation', 'N/A')
+                        score = offer.get('total_weighted_score', 0)
+
+                        # Determine icon and color
+                        if recommendation == 'Best Offer':
+                            icon = "🏆"
+                            color = "green"
+                        elif recommendation == 'Good Alternative':
+                            icon = "✅"
+                            color = "blue"
+                        else:
+                            icon = "📋"
+                            color = "gray"
+
+                        with st.expander(f"{icon} Offer {offer_num} - Score: {score:.2f} - {recommendation}"):
+                            col1, col2 = st.columns(2)
+
+                            with col1:
+                                st.markdown("**Category Scores:**")
+                                scores = offer.get('scores', {})
+                                for category, score_val in scores.items():
+                                    st.write(f"• {category}: {score_val}")
+
+                            with col2:
+                                st.markdown("**Key Details:**")
+                                details = offer.get('details', {})
+                                for key, value in details.items():
+                                    if value and value != 'N/A':
+                                        st.write(f"• {key}: {value}")
+
+                            # Justification
+                            if 'justification' in offer:
+                                st.markdown("**Analysis:**")
+                                st.info(offer['justification'])
+                else:
+                    st.warning("No analysis data available")
+
+    # ===== CHAT TAB =====
+    with chat_tab:
+        st.subheader("💬 Chat with AI About Your Analysis")
+
+        if not st.session_state.analysis_result:
+            st.info("Complete an analysis first, then you can ask questions about the results.")
+        else:
+            # Display chat history
+            for msg in st.session_state.chat_history:
+                role = msg['role']
+                content = msg['content']
+
+                if role == 'user':
+                    with st.chat_message("user"):
+                        st.write(content)
+                else:
+                    with st.chat_message("assistant"):
+                        st.markdown(content)
+
+            # Chat input
+            user_input = st.chat_input("Ask about the analysis...")
+
+            if user_input:
+                # Add user message
+                st.session_state.chat_history.append({
+                    'role': 'user',
+                    'content': user_input
+                })
+
+                # Get AI response
+                with st.spinner("🤖 Thinking..."):
+                    response = agent.chat(user_input)
+
+                    if 'error' not in response:
+                        assistant_msg = response.get('content', 'Sorry, I could not process that.')
+                        st.session_state.chat_history.append({
+                            'role': 'assistant',
+                            'content': assistant_msg
+                        })
+                    else:
+                        st.error(f"Chat error: {response['error']}")
+
+                st.rerun()
+
+            # Quick questions
+            st.subheader("💡 Quick Questions")
+            quick_questions = [
+                "What are the main differences between the top 2 offers?",
+                "Which offer has the best lead time?",
+                "Explain the TCO calculation for the best offer",
+                "What are the risks with each offer?",
+                "Which offer is best for long-term partnership?"
+            ]
+
+            cols = st.columns(2)
+            for i, question in enumerate(quick_questions):
+                with cols[i % 2]:
+                    if st.button(question, key=f"quick_{i}"):
+                        st.session_state.chat_history.append({
+                            'role': 'user',
+                            'content': question
+                        })
+
+                        response = agent.chat(question)
+                        if 'error' not in response:
+                            st.session_state.chat_history.append({
+                                'role': 'assistant',
+                                'content': response.get('content', '')
+                            })
+
+                        st.rerun()
+
+
+# Add this tab to your main() function's tab list:
+# Change from:
+# tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([...])
+# To:
+# tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+#     "📊 Global Dashboard", "📈 Enhanced Forecasting", "🚗 EV Adoption",
+#     "🌍 Geopolitical Risk", "💳 Procurement", "🔗 Supply Chain",
+#     "🌐 Data Sources", "🤖 AI Offer Analysis"  # NEW TAB
+# ])
+#
+# Then add:
+# with tab8:
+#     show_ai_offer_analysis()
 
 if __name__ == "__main__":
     main()

@@ -121,8 +121,6 @@ gdelt:
     - "shortage"
     - "production halt"
 
-# Add this to your existing config.yaml under the ev_adoption section:
-
 ev_adoption:
   data_sources:
     - "iea"
@@ -150,7 +148,6 @@ ev_adoption:
       growth_factor: 1.18
       data_source: "bnef_2024"
   price_elasticity: 0.3
-  # Fixed scenarios structure - remove the ev_sales_ prefix from keys
   scenarios:
     conservative:
       description: "Conservative growth based on current policies"
@@ -350,3 +347,16 @@ debug:
   enable_test_mode: false
   mock_data_fallback: true
   detailed_error_messages: true
+
+agent:
+  enabled: true
+  api_url: "http://agent-api:8000"
+  default_weights:
+    tco: 25
+    payment_terms: 10
+    price_stability: 5
+    lead_time: 20
+    tech_specs: 25
+    certifications: 5
+    incoterms: 5
+    warranty: 5

@@ -1,0 +1,36 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Set Python path to include current directory
+ENV PYTHONPATH=/app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy agent requirements
+COPY agent/requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy agent code
+COPY agent/ .
+
+# Create necessary directories
+RUN mkdir -p /app/runs /app/uploaded_files /app/static
+
+# Verify file structure
+RUN echo "=== File structure in /app ===" && \
+    ls -la /app/ && \
+    echo "=== Checking static directory ===" && \
+    ls -la /app/static/ && \
+    echo "=== Checking Python packages ===" && \
+    python -c "import langchain_experimental; print('langchain_experimental imported successfully')"
+
+# Health check endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
