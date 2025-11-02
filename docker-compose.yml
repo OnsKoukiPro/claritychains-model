@@ -11,6 +11,7 @@ services:
       - ./config:/app/config
       - ./logs:/app/logs
       - ./cache:/app/cache
+      - ./src:/app/src
     environment:
       - STREAMLIT_SERVER_PORT=8501
       - STREAMLIT_SERVER_ADDRESS=0.0.0.0
@@ -18,7 +19,8 @@ services:
       - PYTHONPATH=/app/src
       - DATA_DIR=/app/data
       - CONFIG_DIR=/app/config
-      - AGENT_API_URL=http://localhost:8000
+      - AGENT_API_URL=http://agent-api:8000
+      - DOCKER_ENV=true 
     env_file:
       - .env
     restart: unless-stopped
@@ -37,6 +39,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
+      - ./agent:/app
       - ./agent_data/runs:/app/runs
       - ./agent_data/uploaded_files:/app/uploaded_files
       - ./config:/app/config

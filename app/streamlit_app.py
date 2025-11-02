@@ -2048,7 +2048,8 @@ def show_ai_offer_analysis():
 
     # Import agent client
     try:
-        from src.utils.agent_client import get_agent_client
+        #from src.utils.agent_client import get_agent_client
+        from utils.agent_client import get_agent_client
         agent = get_agent_client()
 
         # Check if agent is available

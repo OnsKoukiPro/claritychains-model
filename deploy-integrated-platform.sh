@@ -252,7 +252,9 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 EOF
 
 echo "📦 Building and starting all services..."
-docker-compose down
+docker-compose down -v --remove-orphans
+docker-compose build --no-cache
+docker-compose up -d --force-recreate
 
 # Try to pull images first to avoid build issues
 echo "📥 Pulling base images..."

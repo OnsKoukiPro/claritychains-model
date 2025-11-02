@@ -13,8 +13,10 @@ class AgentClient:
     """Client for AI procurement analysis agent"""
 
     def __init__(self, base_url: Optional[str] = None):
-        self.base_url = base_url or os.getenv("AGENT_API_URL", "http://localhost:8000")
+        default_url = "http://agent-api:8000" if os.getenv('DOCKER_ENV') else "http://localhost:8000"
+        self.base_url = base_url or os.getenv("AGENT_API_URL", default_url)
         self.session = requests.Session()
+        logger.info(f"Agent client configured with base URL: {self.base_url}")
 
     def health_check(self) -> bool:
         """Check if agent API is available"""
