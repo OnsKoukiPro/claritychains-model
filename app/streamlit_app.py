@@ -2071,7 +2071,7 @@ def show_ai_offer_analysis():
     upload_tab, analyze_tab, chat_tab = st.tabs([
         "📤 Upload Offers",
         "📊 Analysis & Ranking",
-        "💬 AI Chat"
+        "💬 Clare AI Chat"
     ])
 
     # ===== UPLOAD TAB =====
