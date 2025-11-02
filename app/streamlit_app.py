@@ -2032,7 +2032,7 @@ def show_data_sources(config, prices_df, trade_df, data_source):
 
 def show_ai_offer_analysis():
     """AI-powered procurement offer analysis"""
-    st.header("🤖 AI Offer Analysis & Chat")
+    st.header("🤖 Clare AI Offer Analysis & Chat")
 
     st.markdown("""
     Upload multiple supplier offers for AI-powered comparative analysis.
@@ -2044,7 +2044,6 @@ def show_ai_offer_analysis():
 
     # Import agent client
     try:
-        #from src.utils.agent_client import get_agent_client
         from utils.agent_client import get_agent_client
         agent = get_agent_client()
 
@@ -2118,14 +2117,6 @@ def show_ai_offer_analysis():
                                 'count': len(uploaded_files)
                             })
                             st.success(f"✅ Offer {len(st.session_state.offers_staged)} added successfully!")
-
-                            # Clean up temp files after successful upload
-                            #for temp_file in temp_files:
-                            #    try:
-                            #        os.unlink(temp_file)
-                            #    except:
-                            #        pass
-
                             st.rerun()
                         else:
                             st.error(f"Failed to add offer: {result['error']}")
@@ -2143,7 +2134,7 @@ def show_ai_offer_analysis():
 
             for i, offer in enumerate(st.session_state.offers_staged):
                 with st.expander(f"Offer {i+1} - {offer['count']} file(s)"):
-                    for filename in offer['files']:
+                    for filename in offer['file_names']:
                         st.text(f"• {filename}")
         else:
             st.info("No offers staged yet. Upload documents and click 'Add This Offer'.")
@@ -2217,17 +2208,27 @@ def show_ai_offer_analysis():
                 analysis = st.session_state.analysis_result.get('analysis', [])
 
                 if analysis:
+                    # Helper function to safely convert to float
+                    def safe_float(value, default=0.0):
+                        """Safely convert a value to float"""
+                        try:
+                            if value is None or value == '' or value == 'N/A':
+                                return default
+                            return float(value)
+                        except (ValueError, TypeError):
+                            return default
+
                     # Create ranking dataframe
                     ranking_data = []
                     for i, offer in enumerate(analysis):
+                        score = safe_float(offer.get('total_weighted_score', 0))
+
                         ranking_data.append({
                             'Rank': i + 1,
-                            'Offer': f"Offer {offer.get('offer_number', i+1)}",
-                            'Score': float(offer.get('total_weighted_score', 0)),
+                            'Offer': offer.get('offer_name', f"Offer {i+1}"),
+                            'Supplier': offer.get('supplier_name', 'N/A'),
+                            'Score': f"{score:.2f}",
                             'Recommendation': offer.get('recommendation', 'N/A'),
-                            'TCO': offer.get('scores', {}).get('Total Cost of Ownership (TCO)', 'N/A'),
-                            'Lead Time': offer.get('scores', {}).get('Lead Time', 'N/A'),
-                            'Tech Specs': offer.get('scores', {}).get('Technical Specifications', 'N/A')
                         })
 
                     ranking_df = pd.DataFrame(ranking_data)
@@ -2247,47 +2248,81 @@ def show_ai_offer_analysis():
                     st.subheader("📋 Detailed Analysis")
 
                     for offer in analysis:
-                        offer_num = offer.get('offer_number', 'Unknown')
+                        offer_name = offer.get('offer_name', 'Unknown')
+                        supplier_name = offer.get('supplier_name', 'Unknown')
                         recommendation = offer.get('recommendation', 'N/A')
-                        score = offer.get('total_weighted_score', 0)
+                        score = safe_float(offer.get('total_weighted_score', 0))
 
                         # Determine icon and color
                         if recommendation == 'Best Offer':
                             icon = "🏆"
-                            color = "green"
                         elif recommendation == 'Good Alternative':
                             icon = "✅"
-                            color = "blue"
                         else:
                             icon = "📋"
-                            color = "gray"
 
-                        with st.expander(f"{icon} Offer {offer_num} - Score: {score:.2f} - {recommendation}"):
+                        with st.expander(f"{icon} {offer_name} ({supplier_name}) - Score: {score:.2f} - {recommendation}"):
+
+                            # Summary Metrics
+                            st.markdown("**Summary Metrics:**")
+                            summary_metrics = offer.get('summary_metrics', {})
+                            if summary_metrics:
+                                cols = st.columns(3)
+                                for idx, (key, value) in enumerate(summary_metrics.items()):
+                                    with cols[idx % 3]:
+                                        st.metric(key, value)
+
+                            st.markdown("---")
+
+                            # Category Scores
                             col1, col2 = st.columns(2)
 
                             with col1:
                                 st.markdown("**Category Scores:**")
-                                scores = offer.get('scores', {})
-                                for category, score_val in scores.items():
-                                    st.write(f"• {category}: {score_val}")
+                                category_scores = offer.get('category_scores', {})
+                                for category, score_val in category_scores.items():
+                                    score_float = safe_float(score_val)
+                                    st.write(f"• {category}: {score_float:.1f}%")
 
                             with col2:
-                                st.markdown("**Key Details:**")
-                                details = offer.get('details', {})
-                                for key, value in details.items():
-                                    if value and value != 'N/A':
-                                        st.write(f"• {key}: {value}")
+                                st.markdown("**Risk Assessment:**")
+                                risk = offer.get('risk', {})
+                                if risk:
+                                    st.write(f"• Level: {risk.get('level', 'N/A')}")
+                                    st.write(f"• Score: {risk.get('score', 'N/A')}")
+                                    if 'summary' in risk:
+                                        st.caption(risk['summary'])
 
-                            # Justification
-                            if 'justification' in offer:
-                                st.markdown("**Analysis:**")
-                                st.info(offer['justification'])
+                            # Gap Analysis Table
+                            if 'detailed_gap_analysis' in offer:
+                                st.markdown("---")
+                                st.markdown("**Gap Analysis:**")
+                                gap_analysis = offer['detailed_gap_analysis']
+                                headers = gap_analysis.get('headers', [])
+                                rows = gap_analysis.get('rows', [])
+
+                                if headers and rows:
+                                    gap_df = pd.DataFrame(rows, columns=headers)
+                                    st.dataframe(gap_df, use_container_width=True)
+
+                            # Risk Analysis Table
+                            if 'detailed_risk_analysis' in offer:
+                                st.markdown("---")
+                                st.markdown("**Risk Analysis:**")
+                                risk_analysis = offer['detailed_risk_analysis']
+                                headers = risk_analysis.get('headers', [])
+                                rows = risk_analysis.get('rows', [])
+
+                                if headers and rows:
+                                    risk_df = pd.DataFrame(rows, columns=headers)
+                                    st.dataframe(risk_df, use_container_width=True)
+
                 else:
                     st.warning("No analysis data available")
 
     # ===== CHAT TAB =====
     with chat_tab:
-        st.subheader("💬 Chat with AI About Your Analysis")
+        st.subheader("💬 Chat with Clare AI About Your Analysis")
 
         if not st.session_state.analysis_result:
             st.info("Complete an analysis first, then you can ask questions about the results.")
