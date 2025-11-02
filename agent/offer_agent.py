@@ -1,23 +1,28 @@
 from langchain.chains import ConversationChain
 from langchain.memory import ConversationBufferMemory
-from langchain_openai import AzureChatOpenAI as ChatOpenAI
+from langchain_openai import AzureChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain.tools import Tool
 from langchain.chains.llm import LLMChain
 from tools.file_tools import file_reading_tools
 from tools.calculator_tool import calculator_tool
-#from tools.data_normalizer_tool import normalize_offer_data
+import traceback
+import os
 
 
 def create_analysis_agent(weights=None, num_offers=0, offer_files=None):
     """
     Creates a chain for generating a structured JSON analysis of offers.
     """
-    llm = ChatOpenAI(
-        azure_deployment="ClarityChain",  # or your deployment
-        api_version="2024-08-01-preview",
+    # Configure Azure OpenAI
+    llm = AzureChatOpenAI(
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),
+        deployment_name=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),
         temperature=0,
+        model_name=os.getenv("AZURE_OPENAI_MODEL_NAME", "gpt-4"),  # fallback to gpt-4
     )
 
     tools = [
@@ -108,17 +113,21 @@ You have been provided with the following offer files:
 
 If the user has provided additional evaluation criteria in their question, you must also consider it.
 
-Question: {question}
+Question: {input}
 
 IMPORTANT: Your final output must be a single, valid JSON array. The JSON array must contain exactly {num_offers} objects, one for each of the {num_offers} offers presented. You will be penalized if you do not return all offers. Each object must follow these instructions precisely:
 {escaped_json_instructions}
 
+You have access to the following tools:
+
+{tools}
+
 Use the following format:
 
 Question: the input question you must answer
-Thought: you should always think about what to do. After each thought, you must provide an Action.
-Action: The action to take, should be one of [{tool_names}]. The `Action:` line must contain *only* the tool name, without any extra characters, markdown, or formatting.
-Action Input: the input to the action. The `Action Input:` line must contain *only* the input for the tool, and it must be on a single line.
+Thought: you should always think about what to do
+Action: the action to take, should be one of [{tool_names}]
+Action Input: the input to the action
 Observation: the result of the action
 ... (this Thought/Action/Action Input/Observation can repeat N times)
 Thought: I now know the final answer
@@ -126,32 +135,31 @@ Final Answer: the final answer to the original input question
 
 Begin!
 
-Thought: I must use a tool.
-{agent_scratchpad}
-
-TOOLS:
-------
-{tools}
-"""
+Question: {input}
+Thought:{agent_scratchpad}"""
 
     prompt = PromptTemplate(
         template=template,
-        input_variables=["question", "input", "agent_scratchpad", "tools"],
+        input_variables=["input", "agent_scratchpad"],
         partial_variables={
-            "offer_files": "\n".join(offer_files),
+            "offer_files": "\n".join(offer_files) if offer_files else "No files provided",
             "num_offers": num_offers,
             "formatted_weights": formatted_weights,
             "detailed_category_instructions": detailed_category_instructions,
-            "escaped_json_instructions": json_format_instructions.replace(
-                "{{", "{{{{"
-            ).replace("}}", "}}}}"),
+            "escaped_json_instructions": json_format_instructions,
             "tool_names": ", ".join([t.name for t in tools]),
+            "tools": "\n".join([f"{t.name}: {t.description}" for t in tools]),
         },
     )
 
     agent = create_react_agent(llm, tools, prompt)
     agent_executor = AgentExecutor(
-        agent=agent, tools=tools, verbose=True, handle_parsing_errors=True
+        agent=agent,
+        tools=tools,
+        verbose=True,
+        handle_parsing_errors=True,
+        max_iterations=15,  # Increased for complex analysis
+        max_execution_time=300,  # 5 minute timeout
     )
 
     return agent_executor
@@ -161,10 +169,14 @@ def create_chat_agent(analysis_json):
     """
     Creates a conversational agent for answering questions based on the analysis.
     """
-    llm = ChatOpenAI(
-        azure_deployment="ClarityChain",  # or your deployment
-        api_version="2024-08-01-preview",
-        temperature=0,
+    # Configure Azure OpenAI for chat
+    llm = AzureChatOpenAI(
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),
+        deployment_name=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),
+        temperature=0.3,  # Slightly higher for more natural conversation
+        model_name=os.getenv("AZURE_OPENAI_MODEL_NAME", "gpt-4"),
     )
 
     memory = ConversationBufferMemory(
@@ -185,13 +197,16 @@ AI:"""
     prompt = PromptTemplate(
         template=template,
         input_variables=["question", "chat_history"],
-        partial_variables={"analysis_json": analysis_json},
+        partial_variables={"analysis_json": str(analysis_json)},
     )
 
-    qa_chain = LLMChain(llm=llm, prompt=prompt, verbose=True)
-
     chat_agent = ConversationChain(
-        llm=qa_chain.llm, memory=memory, verbose=True, prompt=prompt, input_key="question", output_key="answer"
+        llm=llm,
+        memory=memory,
+        verbose=True,
+        prompt=prompt,
+        input_key="question",
+        output_key="answer"
     )
 
     return chat_agent

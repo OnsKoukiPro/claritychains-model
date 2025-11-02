@@ -418,10 +418,6 @@ def main():
     if BaselineForecaster is None:
         st.warning("⚠️ Enhanced forecasting limited - some features may not work properly")
 
-    # Environment info
-    if os.path.exists('/.dockerenv'):
-        st.sidebar.success("🐳 Running in Docker container")
-
     # Data source selection - ENHANCED OPTIONS
     st.sidebar.header("Data Sources")
     use_real_data = st.sidebar.checkbox("Use Real API Data", value=True)
@@ -2117,10 +2113,19 @@ def show_ai_offer_analysis():
 
                         if 'error' not in result:
                             st.session_state.offers_staged.append({
-                                'files': [f.name for f in uploaded_files],
+                                'files': temp_files,
+                                'file_names': [f.name for f in uploaded_files],
                                 'count': len(uploaded_files)
                             })
                             st.success(f"✅ Offer {len(st.session_state.offers_staged)} added successfully!")
+
+                            # Clean up temp files after successful upload
+                            #for temp_file in temp_files:
+                            #    try:
+                            #        os.unlink(temp_file)
+                            #    except:
+                            #        pass
+
                             st.rerun()
                         else:
                             st.error(f"Failed to add offer: {result['error']}")

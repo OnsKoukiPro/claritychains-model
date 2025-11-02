@@ -209,6 +209,13 @@ langchain-google-genai>=0.0.6
 langchain-experimental>=0.0.55
 markdown==3.5.1
 python-dotenv==1.0.0
+pandas>=2.0.0
+openpyxl>=3.1.0
+PyPDF2>=3.0.0
+python-docx>=1.1.0
+unstructured>=0.10.30
+langchain-community>=0.0.10
+requests>=2.31.0
 EOF
 
 # Create Dockerfile.agent with proper Python path
