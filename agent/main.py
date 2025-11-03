@@ -4,7 +4,6 @@ from fastapi.responses import HTMLResponse, JSONResponse
 import os
 import json
 from typing import List, Dict, Any
-import markdown
 import datetime
 import traceback
 
@@ -69,6 +68,14 @@ async def analyze_offers_api(
     certifications_weight: float = Form(5),
     incoterms_weight: float = Form(5),
     warranty_weight: float = Form(5),
+    # Risk weights
+    delivery_risk_weight: float = Form(15),
+    financial_risk_weight: float = Form(15),
+    technical_risk_weight: float = Form(15),
+    quality_risk_weight: float = Form(15),
+    hse_compliance_risk_weight: float = Form(15),
+    geopolitical_supply_risk_weight: float = Form(10),
+    esg_reputation_risk_weight: float = Form(15),
 ):
     global staged_offers, chain_state, current_run_dir
 
@@ -81,18 +88,18 @@ async def analyze_offers_api(
                 status_code=400, detail="Please add at least one offer for analysis."
             )
 
-        offer_files = [file for offer in staged_offers for file in offer]
         print(f"Number of staged offers: {len(staged_offers)}")
-        print(f"Offer files to analyze: {offer_files}")
 
         # Verify files exist
-        for file_path in offer_files:
-            if not os.path.exists(file_path):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"File not found: {file_path}. Please re-upload offers."
-                )
+        for offer_group in staged_offers:
+            for file_path in offer_group:
+                if not os.path.exists(file_path):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"File not found: {file_path}. Please re-upload offers."
+                    )
 
+        # Prepare weights for the multi-agent system
         weights = {
             "Total Cost of Ownership (TCO)": tco_weight,
             "Payment Terms": payment_terms_weight,
@@ -104,96 +111,98 @@ async def analyze_offers_api(
             "Warranty": warranty_weight,
         }
 
-        print("Creating analysis agent...")
-        analysis_agent = create_analysis_agent(
-            weights=weights, num_offers=len(staged_offers), offer_files=offer_files
+        risk_weights = {
+            "Delivery Risk": delivery_risk_weight,
+            "Financial Risk": financial_risk_weight,
+            "Technical Risk": technical_risk_weight,
+            "Quality Risk": quality_risk_weight,
+            "HSE / Compliance Risk": hse_compliance_risk_weight,
+            "Geopolitical / Supply Risk": geopolitical_supply_risk_weight,
+            "ESG / Reputation Risk": esg_reputation_risk_weight,
+        }
+
+        print("Creating multi-agent analysis system...")
+        print(f"Weights: {weights}")
+        print(f"Risk Weights: {risk_weights}")
+
+        # The new multi-agent system returns a dictionary with output, comparison_summary, and retriever
+        result = create_analysis_agent(
+            weights=weights,
+            risk_weights=risk_weights,
+            num_offers=len(staged_offers),
+            offer_files=staged_offers  # Pass list of lists
         )
 
-        print("Invoking agent...")
-        result = analysis_agent.invoke(
-            {"input": eval_criteria or "Analyze all offers"}
-        )
-        answer = result.get("output", "").strip()
-        print(f"Agent output:\n{answer}")
+        print("Parsing analysis results...")
 
-        # Parse the JSON response
-        analysis_json = {}
-        json_start = answer.find("[")
-        json_end = answer.rfind("]") + 1
+        # Parse the outputs
+        answer = result.get("output", "[]").strip()
+        comparison_summary_str = result.get("comparison_summary", "{}").strip()
+        retriever = result.get("retriever")
 
-        if json_start != -1 and json_end != -1:
-            json_str = answer[json_start:json_end]
-
-            # Clean up markdown code blocks if present
-            if json_str.startswith("```json"):
-                json_str = json_str[7:]
-            if json_str.startswith("```"):
-                json_str = json_str[3:]
-            if json_str.endswith("```"):
-                json_str = json_str[:-3]
-
-            try:
-                analysis_json = json.loads(json_str.strip())
-                print(f"Successfully parsed JSON with {len(analysis_json)} offers")
-
-                # Post-process to set the best offer
-                if (
-                    analysis_json
-                    and isinstance(analysis_json, list)
-                    and len(analysis_json) > 0
-                ):
-                    try:
-                        # Find the offer with the highest score
-                        best_offer = max(
-                            analysis_json,
-                            key=lambda x: float(
-                                x.get("total_weighted_score", "0") or "0"
-                            ),
-                        )
-
-                        # Set the "Best Offer" recommendation
-                        for offer in analysis_json:
-                            if offer is best_offer:
-                                offer["recommendation"] = "Best Offer"
-                            elif offer.get("recommendation") == "Best Offer":
-                                offer["recommendation"] = "Good Alternative"
-                    except (ValueError, TypeError) as e:
-                        print(
-                            f"Could not determine best offer due to score format error: {e}"
-                        )
-
-            except json.JSONDecodeError as e:
-                print(f"JSON Parse Error: {e}")
-                print(f"Failed to parse JSON from:\n{json_str}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Could not parse JSON from AI response: {str(e)}"
-                )
-        else:
-            print(f"No JSON found in output:\n{answer}")
+        try:
+            analysis_json = json.loads(answer)
+            print(f"Successfully parsed analysis JSON with {len(analysis_json)} offers")
+        except json.JSONDecodeError as e:
+            print(f"JSON Parse Error: {e}")
+            print(f"Raw output: {answer}")
             raise HTTPException(
                 status_code=500,
-                detail="AI did not return valid JSON. Please try again."
+                detail=f"Could not parse analysis JSON: {str(e)}"
             )
+
+        try:
+            comparison_json = json.loads(comparison_summary_str)
+            print("Successfully parsed comparison summary")
+        except json.JSONDecodeError as e:
+            print(f"Comparison JSON Parse Error: {e}")
+            comparison_json = {}
+
+        # Post-process to set the best offer
+        if analysis_json and isinstance(analysis_json, list) and len(analysis_json) > 0:
+            try:
+                # Find the offer with the highest score
+                best_offer = max(
+                    analysis_json,
+                    key=lambda x: float(x.get("total_weighted_score", "0") or "0"),
+                )
+
+                # Set the "Best Offer" recommendation
+                for offer in analysis_json:
+                    if offer is best_offer:
+                        offer["recommendation"] = "Best Offer"
+                    elif offer.get("recommendation") == "Best Offer":
+                        offer["recommendation"] = "Good Alternative"
+
+                print(f"Best offer determined: {best_offer.get('supplier_name', 'Unknown')}")
+            except (ValueError, TypeError) as e:
+                print(f"Could not determine best offer: {e}")
 
         if isinstance(analysis_json, dict) and "error" in analysis_json:
             raise HTTPException(status_code=500, detail=analysis_json["error"])
 
         print("Creating chat agent...")
-        chat_agent = create_chat_agent(analysis_json)
+        chat_agent = create_chat_agent(analysis_json, retriever)
 
-        chain_state = {"chat_agent": chat_agent, "analysis": analysis_json}
+        chain_state = {
+            "chat_agent": chat_agent,
+            "analysis": analysis_json,
+            "retriever": retriever,
+            "comparison_summary": comparison_json
+        }
 
         number_of_offers = len(staged_offers)
 
-        # Don't clear current_run_dir yet - files might still be needed
-        # current_run_dir = None
+        # Clear staged offers but keep run directory
         staged_offers = []
+
+        print(f"✓ Analysis complete! Processed {number_of_offers} offers successfully")
 
         return JSONResponse(
             content={
                 "message": f"Successfully analyzed {number_of_offers} offers.",
                 "analysis": analysis_json,
+                "comparison_summary": comparison_json,
             }
         )
 
@@ -230,7 +239,8 @@ async def chat_api(request: Dict[str, Any]):
         chat_agent = chain_state["chat_agent"]
 
         result = chat_agent.invoke({"question": user_text})
-        answer = result["answer"]
+        answer = result.get("answer", "")
+
         return JSONResponse(content={"role": "assistant", "content": answer})
 
     except Exception as e:
@@ -242,6 +252,20 @@ async def chat_api(request: Dict[str, Any]):
                 "content": f"Sorry, a critical error occurred: {str(e)}",
             }
         )
+
+
+@app.get("/api/comparison-summary")
+async def get_comparison_summary():
+    """Get the comparison summary from the last analysis"""
+    global chain_state
+
+    if not chain_state or "comparison_summary" not in chain_state:
+        return JSONResponse(
+            content={"error": "No comparison summary available. Please run analysis first."},
+            status_code=404
+        )
+
+    return JSONResponse(content=chain_state["comparison_summary"])
 
 
 # Serve frontend

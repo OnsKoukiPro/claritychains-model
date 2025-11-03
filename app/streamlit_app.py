@@ -2031,15 +2031,17 @@ def show_data_sources(config, prices_df, trade_df, data_source):
         st.write(f"**GDELTFetcher:** {'✅ Available' if GDELTFetcher is not None else '❌ Not Available'}")
 
 def show_ai_offer_analysis():
-    """AI-powered procurement offer analysis"""
+    """AI-powered procurement offer analysis with multi-agent system"""
     st.header("🤖 Clare AI Offer Analysis & Chat")
 
     st.markdown("""
     Upload multiple supplier offers for AI-powered comparative analysis.
     The AI agent will:
     - Extract and normalize data from documents
+    - Perform detailed gap and risk analysis
     - Score offers based on configurable weights
-    - Provide recommendations and answer questions
+    - Generate comparison insights and action items
+    - Answer questions about the analysis
     """)
 
     # Import agent client
@@ -2068,9 +2070,10 @@ def show_ai_offer_analysis():
         st.session_state.chat_history = []
 
     # Create tabs for different functions
-    upload_tab, analyze_tab, chat_tab = st.tabs([
+    upload_tab, analyze_tab, comparison_tab, chat_tab = st.tabs([
         "📤 Upload Offers",
         "📊 Analysis & Ranking",
+        "📈 Comparison & Insights",
         "💬 Clare AI Chat"
     ])
 
@@ -2097,7 +2100,6 @@ def show_ai_offer_analysis():
             if st.button("➕ Add This Offer", type="primary", disabled=not uploaded_files):
                 if uploaded_files:
                     with st.spinner("Adding offer..."):
-                        # Save files temporarily
                         import tempfile
                         temp_files = []
 
@@ -2156,7 +2158,7 @@ def show_ai_offer_analysis():
             )
 
             # Configure weights
-            st.subheader("⚖️ Configure Analysis Weights")
+            st.subheader("⚖️ Configure Category Weights")
 
             col1, col2 = st.columns(2)
 
@@ -2178,8 +2180,24 @@ def show_ai_offer_analysis():
 
             st.info(f"Total weight: {total_weight} (will be normalized to 100%)")
 
+            # Risk weights
+            with st.expander("🔧 Advanced: Configure Risk Dimension Weights"):
+                st.markdown("**Risk Analysis Weights:**")
+                rcol1, rcol2 = st.columns(2)
+
+                with rcol1:
+                    delivery_risk_weight = st.slider("Delivery Risk", 0, 30, 15, 5)
+                    financial_risk_weight = st.slider("Financial Risk", 0, 30, 15, 5)
+                    technical_risk_weight = st.slider("Technical Risk", 0, 30, 15, 5)
+
+                with rcol2:
+                    quality_risk_weight = st.slider("Quality Risk", 0, 30, 15, 5)
+                    hse_compliance_risk_weight = st.slider("HSE/Compliance Risk", 0, 30, 15, 5)
+                    geopolitical_supply_risk_weight = st.slider("Geopolitical Risk", 0, 20, 10, 5)
+                    esg_reputation_risk_weight = st.slider("ESG/Reputation Risk", 0, 30, 15, 5)
+
             if st.button("🚀 Analyze Offers", type="primary"):
-                with st.spinner("🤖 AI is analyzing your offers... This may take 1-2 minutes..."):
+                with st.spinner("🤖 AI is analyzing your offers... This may take 2-3 minutes..."):
                     weights = {
                         "tco_weight": tco_weight,
                         "payment_terms_weight": payment_terms_weight,
@@ -2188,7 +2206,14 @@ def show_ai_offer_analysis():
                         "tech_spec_weight": tech_spec_weight,
                         "certifications_weight": certifications_weight,
                         "incoterms_weight": incoterms_weight,
-                        "warranty_weight": warranty_weight
+                        "warranty_weight": warranty_weight,
+                        "delivery_risk_weight": delivery_risk_weight,
+                        "financial_risk_weight": financial_risk_weight,
+                        "technical_risk_weight": technical_risk_weight,
+                        "quality_risk_weight": quality_risk_weight,
+                        "hse_compliance_risk_weight": hse_compliance_risk_weight,
+                        "geopolitical_supply_risk_weight": geopolitical_supply_risk_weight,
+                        "esg_reputation_risk_weight": esg_reputation_risk_weight,
                     }
 
                     result = agent.analyze_offers(eval_criteria, weights)
@@ -2222,12 +2247,14 @@ def show_ai_offer_analysis():
                     ranking_data = []
                     for i, offer in enumerate(analysis):
                         score = safe_float(offer.get('total_weighted_score', 0))
+                        risk_score = safe_float(offer.get('risk', {}).get('total_risk_score', 0))
 
                         ranking_data.append({
                             'Rank': i + 1,
                             'Offer': offer.get('offer_name', f"Offer {i+1}"),
                             'Supplier': offer.get('supplier_name', 'N/A'),
                             'Score': f"{score:.2f}",
+                            'Risk Level': offer.get('risk', {}).get('risk_level', 'N/A'),
                             'Recommendation': offer.get('recommendation', 'N/A'),
                         })
 
@@ -2253,7 +2280,7 @@ def show_ai_offer_analysis():
                         recommendation = offer.get('recommendation', 'N/A')
                         score = safe_float(offer.get('total_weighted_score', 0))
 
-                        # Determine icon and color
+                        # Determine icon
                         if recommendation == 'Best Offer':
                             icon = "🏆"
                         elif recommendation == 'Good Alternative':
@@ -2274,7 +2301,7 @@ def show_ai_offer_analysis():
 
                             st.markdown("---")
 
-                            # Category Scores
+                            # Category Scores & Risk Assessment
                             col1, col2 = st.columns(2)
 
                             with col1:
@@ -2288,8 +2315,8 @@ def show_ai_offer_analysis():
                                 st.markdown("**Risk Assessment:**")
                                 risk = offer.get('risk', {})
                                 if risk:
-                                    st.write(f"• Level: {risk.get('level', 'N/A')}")
-                                    st.write(f"• Score: {risk.get('score', 'N/A')}")
+                                    st.write(f"• Level: {risk.get('risk_level', 'N/A')}")
+                                    st.write(f"• Score: {risk.get('total_risk_score', 'N/A')}")
                                     if 'summary' in risk:
                                         st.caption(risk['summary'])
 
@@ -2319,6 +2346,57 @@ def show_ai_offer_analysis():
 
                 else:
                     st.warning("No analysis data available")
+
+    # ===== COMPARISON TAB =====
+    with comparison_tab:
+        st.subheader("📈 Offer Comparison & AI Insights")
+
+        if not st.session_state.analysis_result:
+            st.info("Complete an analysis first to see the comparison summary.")
+        else:
+            comparison_summary = st.session_state.analysis_result.get('comparison_summary', {})
+
+            if comparison_summary and isinstance(comparison_summary, dict):
+                # Comparison Table
+                if 'comparison_table' in comparison_summary:
+                    st.markdown("### 📊 Side-by-Side Comparison")
+                    comparison_table = comparison_summary['comparison_table']
+
+                    if comparison_table:
+                        comp_df = pd.DataFrame(comparison_table)
+                        st.dataframe(comp_df, use_container_width=True)
+
+                # AI Insights
+                if 'ai_insights' in comparison_summary:
+                    st.markdown("### 💡 AI Insights")
+                    with st.expander("View AI Analysis", expanded=True):
+                        st.info(comparison_summary['ai_insights'])
+
+                # Action List
+                if 'action_list' in comparison_summary:
+                    st.markdown("### ✅ Recommended Actions")
+                    actions = comparison_summary['action_list']
+
+                    if actions:
+                        for action in actions:
+                            with st.container():
+                                col1, col2, col3 = st.columns([3, 1, 1])
+                                with col1:
+                                    st.write(f"**{action.get('action', 'N/A')}**")
+                                with col2:
+                                    st.write(f"👤 {action.get('responsible', 'N/A')}")
+                                with col3:
+                                    status = action.get('status', 'Open')
+                                    if status == 'Open':
+                                        st.write("🔴 Open")
+                                    elif status == 'In Progress':
+                                        st.write("🟡 In Progress")
+                                    else:
+                                        st.write("🟢 Complete")
+                                st.caption(f"Due: {action.get('due_date', 'N/A')}")
+                                st.markdown("---")
+            else:
+                st.warning("No comparison summary available")
 
     # ===== CHAT TAB =====
     with chat_tab:
@@ -2369,8 +2447,8 @@ def show_ai_offer_analysis():
             quick_questions = [
                 "What are the main differences between the top 2 offers?",
                 "Which offer has the best lead time?",
-                "Explain the TCO calculation for the best offer",
-                "What are the risks with each offer?",
+                "Explain the risk analysis for each offer",
+                "What are the key action items I should focus on?",
                 "Which offer is best for long-term partnership?"
             ]
 
