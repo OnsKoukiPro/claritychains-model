@@ -2293,13 +2293,22 @@ def show_ai_offer_analysis():
                             # Summary Metrics
                             st.markdown("**Summary Metrics:**")
                             summary_metrics = offer.get('summary_metrics', {})
-                            if summary_metrics:
-                                cols = st.columns(3)
-                                for idx, (key, value) in enumerate(summary_metrics.items()):
-                                    with cols[idx % 3]:
-                                        st.metric(key, value)
+                            if summary_metrics and isinstance(summary_metrics, dict):
+                                # Check if it's a proper dictionary or a string
+                                if len(summary_metrics) > 0:
+                                    cols = st.columns(min(3, len(summary_metrics)))
+                                    metrics_to_show = list(summary_metrics.items())[:3]  # Show first 3 metrics
 
-                            st.markdown("---")
+                                    for idx, (key, value) in enumerate(metrics_to_show):
+                                        with cols[idx % len(cols)]:
+                                            if value and value != 'N/A':
+                                                st.metric(key, value)
+                                            else:
+                                                st.metric(key, "Not specified")
+                                else:
+                                    st.write("No detailed metrics available")
+                            else:
+                                st.write("Summary metrics not available in expected format")
 
                             # Category Scores & Risk Assessment
                             col1, col2 = st.columns(2)
@@ -2354,49 +2363,72 @@ def show_ai_offer_analysis():
         if not st.session_state.analysis_result:
             st.info("Complete an analysis first to see the comparison summary.")
         else:
-            comparison_summary = st.session_state.analysis_result.get('comparison_summary', {})
+            comparison_data = st.session_state.analysis_result.get('comparison_summary', {})
+
+            # Handle nested comparison_summary structure
+            if isinstance(comparison_data, dict) and 'comparison_summary' in comparison_data:
+                comparison_summary = comparison_data['comparison_summary']
+            else:
+                comparison_summary = comparison_data
+
+            # Debug: Show what we received
+            st.write("🔍 Debug - Comparison data structure:")
+            st.json(comparison_data)
 
             if comparison_summary and isinstance(comparison_summary, dict):
                 # Comparison Table
-                if 'comparison_table' in comparison_summary:
+                if 'comparison_table' in comparison_summary and comparison_summary['comparison_table']:
                     st.markdown("### 📊 Side-by-Side Comparison")
                     comparison_table = comparison_summary['comparison_table']
 
-                    if comparison_table:
+                    # Convert to DataFrame for better display
+                    try:
                         comp_df = pd.DataFrame(comparison_table)
                         st.dataframe(comp_df, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"Error displaying comparison table: {e}")
+                        st.write("Raw comparison table data:")
+                        st.write(comparison_table)
+                else:
+                    st.info("No comparison table available in the analysis results.")
 
                 # AI Insights
-                if 'ai_insights' in comparison_summary:
+                if 'ai_insights' in comparison_summary and comparison_summary['ai_insights']:
                     st.markdown("### 💡 AI Insights")
                     with st.expander("View AI Analysis", expanded=True):
                         st.info(comparison_summary['ai_insights'])
+                else:
+                    st.info("No AI insights available in the analysis results.")
 
                 # Action List
-                if 'action_list' in comparison_summary:
+                if 'action_list' in comparison_summary and comparison_summary['action_list']:
                     st.markdown("### ✅ Recommended Actions")
                     actions = comparison_summary['action_list']
 
-                    if actions:
-                        for action in actions:
-                            with st.container():
-                                col1, col2, col3 = st.columns([3, 1, 1])
-                                with col1:
-                                    st.write(f"**{action.get('action', 'N/A')}**")
-                                with col2:
-                                    st.write(f"👤 {action.get('responsible', 'N/A')}")
-                                with col3:
-                                    status = action.get('status', 'Open')
-                                    if status == 'Open':
-                                        st.write("🔴 Open")
-                                    elif status == 'In Progress':
-                                        st.write("🟡 In Progress")
-                                    else:
-                                        st.write("🟢 Complete")
-                                st.caption(f"Due: {action.get('due_date', 'N/A')}")
-                                st.markdown("---")
+                    for i, action in enumerate(actions):
+                        with st.container():
+                            col1, col2, col3 = st.columns([3, 1, 1])
+                            with col1:
+                                st.write(f"**{action.get('action', 'N/A')}**")
+                            with col2:
+                                st.write(f"👤 {action.get('responsible', 'N/A')}")
+                            with col3:
+                                status = action.get('status', 'Open')
+                                if status == 'Open':
+                                    st.write("🔴 Open")
+                                elif status == 'In Progress':
+                                    st.write("🟡 In Progress")
+                                else:
+                                    st.write("🟢 Complete")
+                            if action.get('due_date'):
+                                st.caption(f"Due: {action.get('due_date')}")
+                            st.markdown("---")
+                else:
+                    st.info("No recommended actions available in the analysis results.")
             else:
-                st.warning("No comparison summary available")
+                st.warning("No comparison summary available or invalid format.")
+                st.write("Available keys in analysis result:")
+                st.write(list(st.session_state.analysis_result.keys()))
 
     # ===== CHAT TAB =====
     with chat_tab:

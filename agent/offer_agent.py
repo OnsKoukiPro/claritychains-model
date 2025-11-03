@@ -12,7 +12,7 @@ from langchain.chains import RetrievalQA
 from langchain.schema import Document
 
 # Import tools
-from tools.file_tools import file_reading_tools
+from tools.file_tools import file_reading_tools, read_csv, read_docx, read_pdf, read_xlsx
 from tools.currency_converter_tool import currency_converter
 from tools.calculator_tool import calculator_tool
 from tools.retriever import Retriever
@@ -344,30 +344,31 @@ Given analyzed procurement offers in JSON format, generate:
 {analyzed_offers_json}
 
 **Output Format:**
-```json
-{
-  "comparison_summary": {
+Return a JSON object with a "comparison_summary" key containing "comparison_table", "ai_insights", and "action_list".
+
+Example Output:
+{{
+  "comparison_summary": {{
     "comparison_table": [
-      {
+      {{
         "criterion": "Price (USD)",
         "Supplier A": "$1.05M",
         "Supplier B": "$1.08M",
         "observation": "B +5%, C -2%",
         "highlight": "yellow"
-      }
+      }}
     ],
     "ai_insights": "Supplier B's delivery time is twice as long...",
     "action_list": [
-      {
+      {{
         "action": "Ask Supplier B to explain 20-week delivery time",
         "responsible": "Buyer",
         "status": "Open",
         "due_date": "2025-11-30"
-      }
+      }}
     ]
-  }
-}
-```
+  }}
+}}
 
 Begin!
 
@@ -387,70 +388,78 @@ def _read_and_combine_offer_files(offer_files_group, retriever):
     """
     Reads and combines the content of files for a single offer.
     """
-    llm = _get_llm()
-    tools = file_reading_tools + [currency_converter, calculator_tool]
-
-    template = """Answer the following questions as best you can. You have access to the following tools:
-
-{tools}
-
-Use the following format:
-
-Question: the input question you must answer
-Thought: you should always think about what to do
-Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
-Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question
-
-Begin!
-
-Question: {input}
-Thought:{agent_scratchpad}"""
-
-    prompt = PromptTemplate.from_template(template)
-
-    agent = create_react_agent(llm, tools, prompt)
-    agent_executor = AgentExecutor(
-        agent=agent,
-        tools=tools,
-        verbose=True,
-        handle_parsing_errors=True,
-        max_iterations=10,
-        max_execution_time=180
-    )
-
     combined_content = ""
     supplier_name = "Unknown Supplier"
 
     for file_path in offer_files_group:
-        custom_instructions = f"""
-Your purpose is to read the file at the following path and extract its content and the supplier's name.
-If you find any costs in a currency other than USD, you MUST use the `currency_converter` tool to convert it to USD.
-File to read: {file_path}
-
-Return a JSON object containing:
-- "content": The full text content of the file.
-- "supplier_name": The extracted name of the supplier.
-"""
-
-        input_question = f"{custom_instructions}\n\nQuestion: Read the file and extract the content and supplier name."
-
         try:
-            result = agent_executor.invoke({"input": input_question})
+            print(f"Reading file: {file_path}")
 
-            json_start = result["output"].find("{")
-            json_end = result["output"].rfind("}") + 1
-            if json_start != -1 and json_end != -1:
-                data = json.loads(result["output"][json_start:json_end])
-                content = data.get("content", "")
-                combined_content += content + "\n\n"
-                if supplier_name == "Unknown Supplier" and data.get("supplier_name"):
-                    supplier_name = data.get("supplier_name")
+            # Determine file type and read directly without agent
+            if file_path.endswith('.pdf'):
+                content_docs = read_pdf(file_path)
+            elif file_path.endswith('.docx'):
+                content_docs = read_docx(file_path)
+            elif file_path.endswith('.xlsx'):
+                content_docs = read_xlsx(file_path)
+            elif file_path.endswith('.csv'):
+                content_docs = read_csv(file_path)
+            else:
+                # Try to read as text
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                except:
+                    content = f"Unsupported file type: {file_path}"
+                content_docs = [Document(page_content=content)]
 
-                # Add the content to the retriever
+            # Extract text content from documents
+            if isinstance(content_docs, list):
+                content = "\n\n".join([doc.page_content for doc in content_docs])
+            else:
+                content = str(content_docs)
+
+            combined_content += content + "\n\n"
+
+            # IMPROVED supplier name extraction
+            if supplier_name == "Unknown Supplier":
+                # Look for supplier patterns with better logic
+                lines = content.split('\n')
+                for line in lines[:50]:  # Check first 50 lines
+                    line_clean = line.strip()
+                    line_lower = line_clean.lower()
+
+                    # Skip empty lines and very long lines (likely not supplier names)
+                    if not line_clean or len(line_clean) > 100:
+                        continue
+
+                    # Look for clear supplier indicators
+                    supplier_indicators = ['supplier:', 'vendor:', 'company:', 'provider:', 'bidder:']
+                    for indicator in supplier_indicators:
+                        if indicator in line_lower:
+                            # Extract the part after the indicator
+                            parts = line_clean.split(':', 1)
+                            if len(parts) > 1:
+                                potential_name = parts[1].strip()
+                                if len(potential_name) > 0 and len(potential_name) < 100:
+                                    supplier_name = potential_name
+                                    print(f"Found supplier name: {supplier_name}")
+                                    break
+
+                    # If we found a supplier, break out of the loop
+                    if supplier_name != "Unknown Supplier":
+                        break
+
+                    # Also look for company names in uppercase (common in business documents)
+                    if (line_clean.isupper() and
+                        len(line_clean) > 3 and len(line_clean) < 80 and
+                        not any(word in line_lower for word in ['total', 'price', 'date', 'page'])):
+                        supplier_name = line_clean
+                        print(f"Found supplier name (uppercase): {supplier_name}")
+                        break
+
+            # Add to retriever if enabled
+            if retriever.enabled:
                 retriever.add_to_retriever(
                     [
                         Document(
@@ -459,13 +468,13 @@ Return a JSON object containing:
                         )
                     ]
                 )
+
         except Exception as e:
             print(f"Error reading file {file_path}: {e}")
             traceback.print_exc()
             continue
 
     return {"content": combined_content, "supplier_name": supplier_name}
-
 
 def create_analysis_agent(
     weights=None, risk_weights=None, num_offers=0, offer_files=None
