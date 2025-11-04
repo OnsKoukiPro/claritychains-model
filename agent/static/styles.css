@@ -1,0 +1,29 @@
+/* Basic styles for the procurement agent frontend */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+    color: #333;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.health-status {
+    padding: 15px;
+    border-radius: 5px;
+    margin: 20px 0;
+}
+
+.health-status.healthy {
+    background-color: #e8f5e8;
+    border: 1px solid #4caf50;
+    color: #2e7d32;
+}

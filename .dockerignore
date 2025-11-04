@@ -23,3 +23,7 @@ coverage.xml
 *.db
 *.csv
 !data/templates/*.csv
+data/
+agent_data/
+logs/
+cache/
