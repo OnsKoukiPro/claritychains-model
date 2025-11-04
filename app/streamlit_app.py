@@ -1,3 +1,4 @@
+import json
 from logging import config
 import streamlit as st
 import pandas as pd
@@ -2232,6 +2233,13 @@ def show_ai_offer_analysis():
 
                 analysis = st.session_state.analysis_result.get('analysis', [])
 
+                # Handle case where analysis might be a string instead of list
+                if isinstance(analysis, str):
+                    try:
+                        analysis = json.loads(analysis)
+                    except:
+                        analysis = []
+
                 if analysis:
                     # Helper function to safely convert to float
                     def safe_float(value, default=0.0):
@@ -2264,6 +2272,8 @@ def show_ai_offer_analysis():
                     def highlight_best(row):
                         if row['Recommendation'] == 'Best Offer':
                             return ['background-color: #90EE90'] * len(row)
+                        elif row['Recommendation'] == 'Good Alternative':
+                            return ['background-color: #FFFACD'] * len(row)
                         return [''] * len(row)
 
                     st.dataframe(
@@ -2276,39 +2286,43 @@ def show_ai_offer_analysis():
 
                     for offer in analysis:
                         offer_name = offer.get('offer_name', 'Unknown')
-                        supplier_name = offer.get('supplier_name', 'Unknown')
+                        supplier_name = offer.get('supplier_name', 'Unknown Supplier')
                         recommendation = offer.get('recommendation', 'N/A')
                         score = safe_float(offer.get('total_weighted_score', 0))
 
                         # Determine icon
                         if recommendation == 'Best Offer':
                             icon = "🏆"
+                            color = "green"
                         elif recommendation == 'Good Alternative':
                             icon = "✅"
+                            color = "blue"
                         else:
                             icon = "📋"
+                            color = "red"
 
-                        with st.expander(f"{icon} {offer_name} ({supplier_name}) - Score: {score:.2f} - {recommendation}"):
+                        with st.expander(f"{icon} {offer_name} - {supplier_name} - Score: {score:.2f} - {recommendation}", expanded=True):
 
-                            # Summary Metrics
+                            # Summary Metrics - FIXED DISPLAY
                             st.markdown("**Summary Metrics:**")
                             summary_metrics = offer.get('summary_metrics', {})
-                            if summary_metrics and isinstance(summary_metrics, dict):
-                                # Check if it's a proper dictionary or a string
-                                if len(summary_metrics) > 0:
-                                    cols = st.columns(min(3, len(summary_metrics)))
-                                    metrics_to_show = list(summary_metrics.items())[:3]  # Show first 3 metrics
 
-                                    for idx, (key, value) in enumerate(metrics_to_show):
-                                        with cols[idx % len(cols)]:
-                                            if value and value != 'N/A':
-                                                st.metric(key, value)
-                                            else:
-                                                st.metric(key, "Not specified")
-                                else:
-                                    st.write("No detailed metrics available")
+                            # Handle different formats of summary_metrics
+                            if isinstance(summary_metrics, dict) and summary_metrics:
+                                # Display as key-value pairs
+                                for key, value in summary_metrics.items():
+                                    if value and value != 'N/A':
+                                        col1, col2 = st.columns([1, 3])
+                                        with col1:
+                                            st.write(f"**{key}:**")
+                                        with col2:
+                                            st.write(value)
+                                    st.markdown("---")
+                            elif isinstance(summary_metrics, str):
+                                # If it's a string, just display it
+                                st.write(summary_metrics)
                             else:
-                                st.write("Summary metrics not available in expected format")
+                                st.write("No summary metrics available")
 
                             # Category Scores & Risk Assessment
                             col1, col2 = st.columns(2)
@@ -2316,40 +2330,46 @@ def show_ai_offer_analysis():
                             with col1:
                                 st.markdown("**Category Scores:**")
                                 category_scores = offer.get('category_scores', {})
-                                for category, score_val in category_scores.items():
-                                    score_float = safe_float(score_val)
-                                    st.write(f"• {category}: {score_float:.1f}%")
+                                if category_scores:
+                                    for category, score_val in category_scores.items():
+                                        score_float = safe_float(score_val)
+                                        st.write(f"• {category}: {score_float:.1f}%")
+                                else:
+                                    st.write("No category scores available")
 
                             with col2:
                                 st.markdown("**Risk Assessment:**")
                                 risk = offer.get('risk', {})
                                 if risk:
-                                    st.write(f"• Level: {risk.get('risk_level', 'N/A')}")
-                                    st.write(f"• Score: {risk.get('total_risk_score', 'N/A')}")
-                                    if 'summary' in risk:
-                                        st.caption(risk['summary'])
+                                    st.write(f"• **Level:** {risk.get('risk_level', 'N/A')}")
+                                    st.write(f"• **Score:** {risk.get('total_risk_score', 'N/A')}")
+                                    if 'summary' in risk and risk['summary']:
+                                        st.caption(f"*{risk['summary']}*")
+                                else:
+                                    st.write("No risk assessment available")
 
                             # Gap Analysis Table
-                            if 'detailed_gap_analysis' in offer:
-                                st.markdown("---")
-                                st.markdown("**Gap Analysis:**")
+                            if 'detailed_gap_analysis' in offer and offer['detailed_gap_analysis']:
                                 gap_analysis = offer['detailed_gap_analysis']
                                 headers = gap_analysis.get('headers', [])
                                 rows = gap_analysis.get('rows', [])
 
                                 if headers and rows:
+                                    st.markdown("---")
+                                    st.markdown("**Gap Analysis:**")
                                     gap_df = pd.DataFrame(rows, columns=headers)
                                     st.dataframe(gap_df, use_container_width=True)
 
                             # Risk Analysis Table
-                            if 'detailed_risk_analysis' in offer:
-                                st.markdown("---")
-                                st.markdown("**Risk Analysis:**")
-                                risk_analysis = offer['detailed_risk_analysis']
+                            risk_data = offer.get('risk', {})
+                            if 'detailed_risk_analysis' in risk_data and risk_data['detailed_risk_analysis']:
+                                risk_analysis = risk_data['detailed_risk_analysis']
                                 headers = risk_analysis.get('headers', [])
                                 rows = risk_analysis.get('rows', [])
 
                                 if headers and rows:
+                                    st.markdown("---")
+                                    st.markdown("**Detailed Risk Analysis:**")
                                     risk_df = pd.DataFrame(rows, columns=headers)
                                     st.dataframe(risk_df, use_container_width=True)
 
@@ -2365,15 +2385,25 @@ def show_ai_offer_analysis():
         else:
             comparison_data = st.session_state.analysis_result.get('comparison_summary', {})
 
-            # Handle nested comparison_summary structure
-            if isinstance(comparison_data, dict) and 'comparison_summary' in comparison_data:
+            # Debug: Show what we received
+            with st.expander("🔍 Debug - Raw Data Structure"):
+                st.json(comparison_data)
+
+            # Handle the nested comparison_summary structure
+            if isinstance(comparison_data, str):
+                try:
+                    comparison_data = json.loads(comparison_data)
+                except json.JSONDecodeError as e:
+                    st.error(f"Error parsing comparison data: {e}")
+                    st.write("Raw comparison data:")
+                    st.code(comparison_data)
+                    comparison_data = {}
+
+            # Extract the actual comparison summary (it's nested under 'comparison_summary')
+            if 'comparison_summary' in comparison_data:
                 comparison_summary = comparison_data['comparison_summary']
             else:
                 comparison_summary = comparison_data
-
-            # Debug: Show what we received
-            st.write("🔍 Debug - Comparison data structure:")
-            st.json(comparison_data)
 
             if comparison_summary and isinstance(comparison_summary, dict):
                 # Comparison Table
@@ -2383,12 +2413,29 @@ def show_ai_offer_analysis():
 
                     # Convert to DataFrame for better display
                     try:
-                        comp_df = pd.DataFrame(comparison_table)
-                        st.dataframe(comp_df, use_container_width=True)
+                        # Create a clean dataframe from the comparison table
+                        rows = []
+                        for item in comparison_table:
+                            if isinstance(item, dict):
+                                row = {
+                                    'Criterion': item.get('criterion', ''),
+                                    'Offer 1': item.get('Offer 1', ''),
+                                    'Offer 2': item.get('Offer 2', ''),
+                                    'Offer 3': item.get('Offer 3', ''),
+                                    'Observation': item.get('observation', ''),
+                                    'Highlight': item.get('highlight', '')
+                                }
+                                rows.append(row)
+
+                        if rows:
+                            comp_df = pd.DataFrame(rows)
+                            st.dataframe(comp_df, use_container_width=True, hide_index=True)
+                        else:
+                            st.info("No comparison data available in table format.")
                     except Exception as e:
                         st.error(f"Error displaying comparison table: {e}")
                         st.write("Raw comparison table data:")
-                        st.write(comparison_table)
+                        st.json(comparison_table)
                 else:
                     st.info("No comparison table available in the analysis results.")
 
@@ -2396,7 +2443,14 @@ def show_ai_offer_analysis():
                 if 'ai_insights' in comparison_summary and comparison_summary['ai_insights']:
                     st.markdown("### 💡 AI Insights")
                     with st.expander("View AI Analysis", expanded=True):
-                        st.info(comparison_summary['ai_insights'])
+                        insights = comparison_summary['ai_insights']
+                        if isinstance(insights, list):
+                            for i, insight in enumerate(insights):
+                                st.write(f"• {insight}")
+                        elif isinstance(insights, str):
+                            st.info(insights)
+                        else:
+                            st.json(insights)
                 else:
                     st.info("No AI insights available in the analysis results.")
 
@@ -2406,29 +2460,26 @@ def show_ai_offer_analysis():
                     actions = comparison_summary['action_list']
 
                     for i, action in enumerate(actions):
-                        with st.container():
-                            col1, col2, col3 = st.columns([3, 1, 1])
-                            with col1:
-                                st.write(f"**{action.get('action', 'N/A')}**")
-                            with col2:
-                                st.write(f"👤 {action.get('responsible', 'N/A')}")
-                            with col3:
-                                status = action.get('status', 'Open')
-                                if status == 'Open':
-                                    st.write("🔴 Open")
-                                elif status == 'In Progress':
-                                    st.write("🟡 In Progress")
-                                else:
-                                    st.write("🟢 Complete")
-                            if action.get('due_date'):
-                                st.caption(f"Due: {action.get('due_date')}")
-                            st.markdown("---")
+                        if isinstance(action, dict):
+                            with st.container():
+                                col1, col2, col3, col4 = st.columns([4, 1.5, 1, 1])
+                                with col1:
+                                    st.write(f"**{action.get('action', 'N/A')}**")
+                                with col2:
+                                    st.write(f"👤 {action.get('responsible', 'N/A')}")
+                                with col3:
+                                    status = action.get('status', 'Open')
+                                    status_emoji = "🔴" if status == 'Open' else "🟡" if status == 'In Progress' else "🟢"
+                                    st.write(f"{status_emoji} {status}")
+                                with col4:
+                                    due_date = action.get('due_date', '')
+                                    if due_date:
+                                        st.caption(f"Due: {due_date}")
+                                st.markdown("---")
                 else:
                     st.info("No recommended actions available in the analysis results.")
             else:
                 st.warning("No comparison summary available or invalid format.")
-                st.write("Available keys in analysis result:")
-                st.write(list(st.session_state.analysis_result.keys()))
 
     # ===== CHAT TAB =====
     with chat_tab:

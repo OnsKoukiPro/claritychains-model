@@ -40,6 +40,45 @@ def _get_llm():
         model_name=os.getenv("AZURE_OPENAI_MODEL_NAME", "gpt-4o"),
     )
 
+def _extract_supplier_name_with_llm(content, llm):
+    """
+    Use LLM to extract supplier/company name from document content.
+    This is more reliable than regex patterns.
+    """
+    # Take first 3000 characters to avoid token limits
+    content_sample = content[:3000]
+
+    extraction_prompt = f"""You are an expert at extracting company/supplier names from procurement documents.
+
+Extract the supplier or company name from this document excerpt.
+
+**Rules:**
+1. Return ONLY the company/supplier name, nothing else
+2. DO NOT return things like "stated €)", "Line item calc total €", or other text fragments
+3. Look for the actual company name (e.g., "ACME Corporation", "Smith & Sons Ltd", "TechSupply Inc")
+4. If you find multiple company names, return the one that appears to be the supplier/vendor
+5. If no clear company name is found, return "Unknown Supplier"
+
+**Document Excerpt:**
+{content_sample}
+
+**Supplier Name:**"""
+
+    try:
+        response = llm.invoke(extraction_prompt)
+        supplier_name = response.content.strip()
+
+        # Validate the extracted name
+        if (len(supplier_name) > 3 and
+            len(supplier_name) < 100 and
+            supplier_name != "Unknown Supplier" and
+            not any(x in supplier_name.lower() for x in ['stated', 'calc', 'total', 'line item', 'page', 'document'])):
+            return supplier_name
+        else:
+            return "Unknown Supplier"
+    except Exception as e:
+        print(f"Error in LLM supplier extraction: {e}")
+        return "Unknown Supplier"
 
 def create_gap_analysis_agent():
     """
@@ -250,8 +289,8 @@ def create_final_output_agent():
 
     json_format_instructions = """
 {
-  "offer_name": "Name of the offer",
-  "supplier_name": "Name of the supplier",
+  "offer_name": "Name of the offer (e.g., Offer 1, Offer 2)",
+  "supplier_name": "Name of the supplier company",
   "summary_metrics": {
     "Total Price": "...",
     "Lead Time": "...",
@@ -285,25 +324,37 @@ def create_final_output_agent():
     template = """You are the final assembly agent.
 Combine outputs from gap analysis, risk analysis, and scoring agents into a single JSON object.
 
+**CRITICAL: You MUST include the supplier_name field exactly as provided below.**
+
 **Offer Name:** {offer_name}
 **Supplier Name:** {supplier_name}
 **Gap Analysis Output (JSON):** {gap_analysis_output}
 **Risk Analysis Output (JSON):** {risk_analysis_output}
 **Scoring Output (JSON):** {scoring_output}
 
-**Summary Metrics:**
-Extract "Total Price", "Lead Time", and "Payment Terms" from gap analysis.
+**Instructions:**
+1. Create a JSON object with the structure shown below
+2. Set "offer_name" to: {offer_name}
+3. Set "supplier_name" to: {supplier_name}
+4. Extract "Total Price", "Lead Time", and "Payment Terms" from gap analysis for summary_metrics
+5. Include all risk analysis data under the "risk" key
+6. Include scoring data (total_weighted_score and category_scores)
+7. Include the detailed_gap_analysis table
 
-**Recommendation:**
+**Recommendation Logic:**
 Based on `total_weighted_score`:
-- Score > 90: "Best Offer"
-- Score 80-90: "Good Alternative"
-- Score < 80: "Not Recommended"
+- Score > 85: "Best Offer"
+- Score 75-85: "Good Alternative"
+- Score < 75: "Not Recommended"
 
-**Final JSON Structure:**
+**Required JSON Structure:**
 {escaped_json_instructions}
 
-Combine all provided information into a single JSON object following the structure precisely.
+**IMPORTANT:**
+- The "offer_name" should be "{offer_name}"
+- The "supplier_name" should be "{supplier_name}"
+- Do NOT mix up these two fields
+- Ensure all numerical scores are included
 
 Begin!
 
@@ -384,9 +435,10 @@ Begin!
     return chain
 
 
-def _read_and_combine_offer_files(offer_files_group, retriever):
+def _read_and_combine_offer_files(offer_files_group, retriever, llm):
     """
     Reads and combines the content of files for a single offer.
+    Now includes LLM-based supplier extraction.
     """
     combined_content = ""
     supplier_name = "Unknown Supplier"
@@ -421,42 +473,11 @@ def _read_and_combine_offer_files(offer_files_group, retriever):
 
             combined_content += content + "\n\n"
 
-            # IMPROVED supplier name extraction
+            # Extract supplier name using LLM (only from first file if not found yet)
             if supplier_name == "Unknown Supplier":
-                # Look for supplier patterns with better logic
-                lines = content.split('\n')
-                for line in lines[:50]:  # Check first 50 lines
-                    line_clean = line.strip()
-                    line_lower = line_clean.lower()
-
-                    # Skip empty lines and very long lines (likely not supplier names)
-                    if not line_clean or len(line_clean) > 100:
-                        continue
-
-                    # Look for clear supplier indicators
-                    supplier_indicators = ['supplier:', 'vendor:', 'company:', 'provider:', 'bidder:']
-                    for indicator in supplier_indicators:
-                        if indicator in line_lower:
-                            # Extract the part after the indicator
-                            parts = line_clean.split(':', 1)
-                            if len(parts) > 1:
-                                potential_name = parts[1].strip()
-                                if len(potential_name) > 0 and len(potential_name) < 100:
-                                    supplier_name = potential_name
-                                    print(f"Found supplier name: {supplier_name}")
-                                    break
-
-                    # If we found a supplier, break out of the loop
-                    if supplier_name != "Unknown Supplier":
-                        break
-
-                    # Also look for company names in uppercase (common in business documents)
-                    if (line_clean.isupper() and
-                        len(line_clean) > 3 and len(line_clean) < 80 and
-                        not any(word in line_lower for word in ['total', 'price', 'date', 'page'])):
-                        supplier_name = line_clean
-                        print(f"Found supplier name (uppercase): {supplier_name}")
-                        break
+                print("Attempting LLM-based supplier extraction...")
+                supplier_name = _extract_supplier_name_with_llm(content, llm)
+                print(f"LLM extracted supplier: '{supplier_name}'")
 
             # Add to retriever if enabled
             if retriever.enabled:
@@ -474,6 +495,7 @@ def _read_and_combine_offer_files(offer_files_group, retriever):
             traceback.print_exc()
             continue
 
+    print(f"Final supplier name for this offer: '{supplier_name}'")
     return {"content": combined_content, "supplier_name": supplier_name}
 
 def create_analysis_agent(
@@ -481,17 +503,9 @@ def create_analysis_agent(
 ):
     """
     Orchestrates the analysis of procurement offers using specialized agents.
-
-    Args:
-        weights: Dictionary of category weights for scoring
-        risk_weights: Dictionary of risk dimension weights
-        num_offers: Number of offers to analyze
-        offer_files: List of lists, where each inner list contains file paths for one offer
-
-    Returns:
-        Dictionary with 'output', 'comparison_summary', and 'retriever'
     """
     retriever = Retriever()
+    llm = _get_llm()  # Get LLM instance for supplier extraction
 
     # Default weights if not provided
     if weights is None:
@@ -533,8 +547,8 @@ def create_analysis_agent(
         print(f"Processing {offer_name}: {offer_files_group}")
         print(f"{'='*60}\n")
 
-        # Read and combine offer files
-        offer_data = _read_and_combine_offer_files(offer_files_group, retriever)
+        # Read and combine offer files (now with LLM-based extraction)
+        offer_data = _read_and_combine_offer_files(offer_files_group, retriever, llm)
         offer_text = offer_data.get("content")
         supplier_name = offer_data.get("supplier_name", "Unknown Supplier")
 
@@ -542,8 +556,8 @@ def create_analysis_agent(
             print(f"Warning: No content extracted from {offer_name}")
             continue
 
-        print(f"Extracted supplier: {supplier_name}")
-        print(f"Content length: {len(offer_text)} characters")
+        print(f"✓ Extracted supplier: '{supplier_name}'")
+        print(f"✓ Content length: {len(offer_text)} characters")
 
         # Gap Analysis
         print(f"\n--- Running Gap Analysis for {offer_name} ---")
@@ -590,18 +604,26 @@ def create_analysis_agent(
 
         try:
             final_offer_json = json.loads(final_offer_json_str)
+
+            # CRITICAL FIX: Force the correct supplier_name and offer_name
+            # This prevents the LLM from overwriting with incorrect values
+            final_offer_json['supplier_name'] = supplier_name
+            final_offer_json['offer_name'] = offer_name
+
+            print(f"✓ Final JSON - Offer: '{final_offer_json['offer_name']}', Supplier: '{final_offer_json['supplier_name']}'")
+
             final_json_outputs.append(final_offer_json)
 
             # Add to retriever
             retriever.add_to_retriever(
                 [
                     Document(
-                        page_content=final_offer_json_str,
+                        page_content=json.dumps(final_offer_json),
                         metadata={"supplier": supplier_name, "type": "analysis"},
                     )
                 ]
             )
-            print(f"✓ Successfully processed {offer_name}")
+            print(f"✓ Successfully processed {offer_name} from {supplier_name}")
         except json.JSONDecodeError as e:
             print(f"Error parsing final JSON for {offer_name}: {e}")
             traceback.print_exc()
@@ -610,6 +632,12 @@ def create_analysis_agent(
     print(f"\n{'='*60}")
     print(f"Processed {len(final_json_outputs)} offers successfully")
     print(f"{'='*60}\n")
+
+    # Debug: Print all supplier names before comparison
+    print("\n--- Supplier Names Before Comparison ---")
+    for offer in final_json_outputs:
+        print(f"  {offer.get('offer_name')}: {offer.get('supplier_name')}")
+    print("---\n")
 
     # Generate comparison summary
     comparison_summary = "{}"
