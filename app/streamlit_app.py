@@ -1,3 +1,4 @@
+import json
 from logging import config
 import streamlit as st
 import pandas as pd
@@ -418,10 +419,6 @@ def main():
     if BaselineForecaster is None:
         st.warning("⚠️ Enhanced forecasting limited - some features may not work properly")
 
-    # Environment info
-    if os.path.exists('/.dockerenv'):
-        st.sidebar.success("🐳 Running in Docker container")
-
     # Data source selection - ENHANCED OPTIONS
     st.sidebar.header("Data Sources")
     use_real_data = st.sidebar.checkbox("Use Real API Data", value=True)
@@ -457,34 +454,34 @@ def main():
         st.sidebar.info("Enable 'Use Real API Data' for live global data")
 
     # Enhanced main tabs with global focus
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-        "📊 Global Dashboard", "📈 Enhanced Forecasting", "🚗 EV Adoption",  # UPDATED
-        "🌍 Geopolitical Risk", "💳 Procurement", "🔗 Supply Chain", "🌐 Data Sources"  # UPDATED
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+        "🤖 Clare AI Offer Analysis", "📊 Global Dashboard", "📈 Enhanced Forecasting", "🚗 EV Adoption",  # UPDATED
+        "🌍 Geopolitical Risk", "💳 Procurement", "🔗 Supply Chain", "🌐 Data Sources",   # UPDATED
     ])
 
     with tab1:
+        show_ai_offer_analysis()
+    with tab2:
         show_live_dashboard(prices_df, trade_df, data_source)
 
-    with tab2:
+    with tab3:
         show_enhanced_forecasting(prices_df, data_source, use_enhanced_forecasting)
 
-    with tab3:
+    with tab4:
         show_ev_adoption_analysis()
 
-    with tab4:
+    with tab5:
         show_geopolitical_risk()
 
-    with tab5:
+    with tab6:
         show_procurement_analysis(prices_df)
 
-    with tab6:
+    with tab7:
         show_supply_chain_analysis(trade_df)
 
-    with tab7:
+    with tab8:
         show_data_sources(load_config(), prices_df, trade_df, data_source)
 
-# ... (rest of your functions remain exactly the same - show_live_dashboard, show_enhanced_forecasting, etc.)
-# All the other functions from show_live_dashboard to the end of the file remain unchanged
 
 def classify_data_source(source):
     """Classify data source by region and type"""
@@ -2033,6 +2030,583 @@ def show_data_sources(config, prices_df, trade_df, data_source):
         st.write(f"**EVAdoptionFetcher:** {'✅ Available' if EVAdoptionFetcher is not None else '❌ Not Available'}")
     with status_col3:
         st.write(f"**GDELTFetcher:** {'✅ Available' if GDELTFetcher is not None else '❌ Not Available'}")
+
+def show_ai_offer_analysis():
+    """AI-powered procurement offer analysis with multi-agent system"""
+    st.header("🤖 Clare AI Offer Analysis & Chat")
+
+    st.markdown("""
+    Upload multiple supplier offers for AI-powered comparative analysis.
+    The AI agent will:
+    - Extract and normalize data from documents
+    - Perform detailed gap and risk analysis
+    - Score offers based on configurable weights
+    - Generate comparison insights and action items
+    - Answer questions about the analysis
+    """)
+
+    # Import agent client
+    try:
+        from utils.agent_client import get_agent_client
+        agent = get_agent_client()
+
+        # Check if agent is available
+        if not agent.health_check():
+            st.error("❌ AI Agent API is not available. Please ensure the agent-api service is running.")
+            st.info("Start the agent with: `docker-compose up agent-api`")
+            return
+
+        st.success("✅ AI Agent is ready")
+
+    except ImportError:
+        st.error("❌ Agent client not available. Please check installation.")
+        return
+
+    # Initialize session state
+    if 'offers_staged' not in st.session_state:
+        st.session_state.offers_staged = []
+    if 'analysis_result' not in st.session_state:
+        st.session_state.analysis_result = None
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+
+    # Create tabs for different functions
+    upload_tab, analyze_tab, comparison_tab, chat_tab = st.tabs([
+        "📤 Upload Offers",
+        "📊 Analysis & Ranking",
+        "📈 Comparison & Insights",
+        "💬 Clare AI Chat"
+    ])
+
+    # ===== UPLOAD TAB =====
+    with upload_tab:
+        st.subheader("Upload Supplier Offers")
+
+        st.info("""
+        **Supported formats:** PDF, DOCX, TXT, CSV, Excel
+
+        Upload all documents for a single offer, then click "Add Offer" before uploading the next offer.
+        """)
+
+        uploaded_files = st.file_uploader(
+            "Select offer documents",
+            accept_multiple_files=True,
+            type=['pdf', 'docx', 'txt', 'csv', 'xlsx', 'xls'],
+            key='offer_uploader'
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button("➕ Add This Offer", type="primary", disabled=not uploaded_files):
+                if uploaded_files:
+                    with st.spinner("Adding offer..."):
+                        import tempfile
+                        temp_files = []
+
+                        for uploaded_file in uploaded_files:
+                            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=uploaded_file.name)
+                            temp_file.write(uploaded_file.getvalue())
+                            temp_file.close()
+                            temp_files.append(temp_file.name)
+
+                        # Add to agent
+                        result = agent.add_offer(temp_files)
+
+                        if 'error' not in result:
+                            st.session_state.offers_staged.append({
+                                'files': temp_files,
+                                'file_names': [f.name for f in uploaded_files],
+                                'count': len(uploaded_files)
+                            })
+                            st.success(f"✅ Offer {len(st.session_state.offers_staged)} added successfully!")
+                            st.rerun()
+                        else:
+                            st.error(f"Failed to add offer: {result['error']}")
+
+        with col2:
+            if st.button("🗑️ Clear All Offers"):
+                st.session_state.offers_staged = []
+                st.session_state.analysis_result = None
+                st.session_state.chat_history = []
+                st.rerun()
+
+        # Show staged offers
+        if st.session_state.offers_staged:
+            st.subheader(f"📋 Staged Offers ({len(st.session_state.offers_staged)})")
+
+            for i, offer in enumerate(st.session_state.offers_staged):
+                with st.expander(f"Offer {i+1} - {offer['count']} file(s)"):
+                    for filename in offer['file_names']:
+                        st.text(f"• {filename}")
+        else:
+            st.info("No offers staged yet. Upload documents and click 'Add This Offer'.")
+
+    # ===== ANALYSIS TAB =====
+    with analyze_tab:
+        st.subheader("Configure Analysis & Run")
+
+        if not st.session_state.offers_staged:
+            st.warning("⚠️ Please add at least one offer in the Upload tab first.")
+        else:
+            st.success(f"Ready to analyze {len(st.session_state.offers_staged)} offers")
+
+            # Evaluation criteria
+            eval_criteria = st.text_area(
+                "Additional Evaluation Criteria (optional)",
+                placeholder="e.g., Prioritize suppliers with ISO certifications and shorter lead times",
+                help="Provide any specific requirements or preferences"
+            )
+
+            # Configure weights
+            st.subheader("⚖️ Configure Category Weights")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                tco_weight = st.slider("Total Cost of Ownership", 0, 50, 25, 5)
+                payment_terms_weight = st.slider("Payment Terms", 0, 30, 10, 5)
+                price_stability_weight = st.slider("Price Stability", 0, 20, 5, 5)
+                lead_time_weight = st.slider("Lead Time", 0, 40, 20, 5)
+
+            with col2:
+                tech_spec_weight = st.slider("Technical Specifications", 0, 50, 25, 5)
+                certifications_weight = st.slider("Certifications", 0, 20, 5, 5)
+                incoterms_weight = st.slider("Incoterms", 0, 20, 5, 5)
+                warranty_weight = st.slider("Warranty", 0, 20, 5, 5)
+
+            total_weight = (tco_weight + payment_terms_weight + price_stability_weight +
+                          lead_time_weight + tech_spec_weight + certifications_weight +
+                          incoterms_weight + warranty_weight)
+
+            st.info(f"Total weight: {total_weight} (will be normalized to 100%)")
+
+            # Risk weights
+            with st.expander("🔧 Advanced: Configure Risk Dimension Weights"):
+                st.markdown("**Risk Analysis Weights:**")
+                rcol1, rcol2 = st.columns(2)
+
+                with rcol1:
+                    delivery_risk_weight = st.slider("Delivery Risk", 0, 30, 15, 5)
+                    financial_risk_weight = st.slider("Financial Risk", 0, 30, 15, 5)
+                    technical_risk_weight = st.slider("Technical Risk", 0, 30, 15, 5)
+
+                with rcol2:
+                    quality_risk_weight = st.slider("Quality Risk", 0, 30, 15, 5)
+                    hse_compliance_risk_weight = st.slider("HSE/Compliance Risk", 0, 30, 15, 5)
+                    geopolitical_supply_risk_weight = st.slider("Geopolitical Risk", 0, 20, 10, 5)
+                    esg_reputation_risk_weight = st.slider("ESG/Reputation Risk", 0, 30, 15, 5)
+
+            if st.button("🚀 Analyze Offers", type="primary"):
+                with st.spinner("🤖 AI is analyzing your offers... This may take 2-3 minutes..."):
+                    weights = {
+                        "tco_weight": tco_weight,
+                        "payment_terms_weight": payment_terms_weight,
+                        "price_stability_weight": price_stability_weight,
+                        "lead_time_weight": lead_time_weight,
+                        "tech_spec_weight": tech_spec_weight,
+                        "certifications_weight": certifications_weight,
+                        "incoterms_weight": incoterms_weight,
+                        "warranty_weight": warranty_weight,
+                        "delivery_risk_weight": delivery_risk_weight,
+                        "financial_risk_weight": financial_risk_weight,
+                        "technical_risk_weight": technical_risk_weight,
+                        "quality_risk_weight": quality_risk_weight,
+                        "hse_compliance_risk_weight": hse_compliance_risk_weight,
+                        "geopolitical_supply_risk_weight": geopolitical_supply_risk_weight,
+                        "esg_reputation_risk_weight": esg_reputation_risk_weight,
+                    }
+
+                    result = agent.analyze_offers(eval_criteria, weights)
+
+                    if 'error' not in result:
+                        st.session_state.analysis_result = result
+                        st.success("✅ Analysis complete!")
+                        st.rerun()
+                    else:
+                        st.error(f"Analysis failed: {result['error']}")
+
+            # Display results if available
+            if st.session_state.analysis_result:
+                st.markdown("---")
+                st.subheader("📊 Analysis Results")
+
+                analysis = st.session_state.analysis_result.get('analysis', [])
+
+                # Handle case where analysis might be a string instead of list
+                if isinstance(analysis, str):
+                    try:
+                        analysis = json.loads(analysis)
+                    except:
+                        analysis = []
+
+                if analysis:
+                    # Helper function to safely convert to float
+                    def safe_float(value, default=0.0):
+                        """Safely convert a value to float"""
+                        try:
+                            if value is None or value == '' or value == 'N/A':
+                                return default
+                            return float(value)
+                        except (ValueError, TypeError):
+                            return default
+
+                    # Create ranking dataframe
+                    ranking_data = []
+                    for i, offer in enumerate(analysis):
+                        score = safe_float(offer.get('total_weighted_score', 0))
+                        risk_score = safe_float(offer.get('risk', {}).get('total_risk_score', 0))
+
+                        ranking_data.append({
+                            'Rank': i + 1,
+                            'Offer': offer.get('offer_name', f"Offer {i+1}"),
+                            'Supplier': offer.get('supplier_name', 'N/A'),
+                            'Score': f"{score:.2f}",
+                            'Risk Level': offer.get('risk', {}).get('risk_level', 'N/A'),
+                            'Recommendation': offer.get('recommendation', 'N/A'),
+                        })
+
+                    ranking_df = pd.DataFrame(ranking_data)
+
+                    # Highlight best offer
+                    def highlight_best(row):
+                        if row['Recommendation'] == 'Best Offer':
+                            return ['background-color: #90EE90'] * len(row)
+                        elif row['Recommendation'] == 'Good Alternative':
+                            return ['background-color: #FFFACD'] * len(row)
+                        return [''] * len(row)
+
+                    st.dataframe(
+                        ranking_df.style.apply(highlight_best, axis=1),
+                        use_container_width=True
+                    )
+
+                    # Detailed view
+                    st.subheader("📋 Detailed Analysis")
+
+                    for offer in analysis:
+                        offer_name = offer.get('offer_name', 'Unknown')
+                        supplier_name = offer.get('supplier_name', 'Unknown Supplier')
+                        recommendation = offer.get('recommendation', 'N/A')
+                        score = safe_float(offer.get('total_weighted_score', 0))
+
+                        # Determine icon
+                        if recommendation == 'Best Offer':
+                            icon = "🏆"
+                            color = "green"
+                        elif recommendation == 'Good Alternative':
+                            icon = "✅"
+                            color = "blue"
+                        else:
+                            icon = "📋"
+                            color = "red"
+
+                        with st.expander(f"{icon} {offer_name} - {supplier_name} - Score: {score:.2f} - {recommendation}", expanded=True):
+
+                            # Summary Metrics - FIXED DISPLAY
+                            st.markdown("**Summary Metrics:**")
+                            summary_metrics = offer.get('summary_metrics', {})
+
+                            # Handle different formats of summary_metrics
+                            if isinstance(summary_metrics, dict) and summary_metrics:
+                                # Display as key-value pairs
+                                for key, value in summary_metrics.items():
+                                    if value and value != 'N/A':
+                                        col1, col2 = st.columns([1, 3])
+                                        with col1:
+                                            st.write(f"**{key}:**")
+                                        with col2:
+                                            st.write(value)
+                                    st.markdown("---")
+                            elif isinstance(summary_metrics, str):
+                                # If it's a string, just display it
+                                st.write(summary_metrics)
+                            else:
+                                st.write("No summary metrics available")
+
+                            # Category Scores & Risk Assessment
+                            col1, col2 = st.columns(2)
+
+                            with col1:
+                                st.markdown("**Category Scores:**")
+                                category_scores = offer.get('category_scores', {})
+                                if category_scores:
+                                    for category, score_val in category_scores.items():
+                                        score_float = safe_float(score_val)
+                                        st.write(f"• {category}: {score_float:.1f}%")
+                                else:
+                                    st.write("No category scores available")
+
+                            with col2:
+                                st.markdown("**Risk Assessment:**")
+                                risk = offer.get('risk', {})
+                                if risk:
+                                    st.write(f"• **Level:** {risk.get('risk_level', 'N/A')}")
+                                    st.write(f"• **Score:** {risk.get('total_risk_score', 'N/A')}")
+                                    if 'summary' in risk and risk['summary']:
+                                        st.caption(f"*{risk['summary']}*")
+                                else:
+                                    st.write("No risk assessment available")
+
+                            # Gap Analysis Table
+                            if 'detailed_gap_analysis' in offer and offer['detailed_gap_analysis']:
+                                gap_analysis = offer['detailed_gap_analysis']
+                                headers = gap_analysis.get('headers', [])
+                                rows = gap_analysis.get('rows', [])
+
+                                if headers and rows:
+                                    st.markdown("---")
+                                    st.markdown("**Gap Analysis:**")
+                                    gap_df = pd.DataFrame(rows, columns=headers)
+                                    st.dataframe(gap_df, use_container_width=True)
+
+                            # Risk Analysis Table
+                            risk_data = offer.get('risk', {})
+                            if 'detailed_risk_analysis' in risk_data and risk_data['detailed_risk_analysis']:
+                                risk_analysis = risk_data['detailed_risk_analysis']
+                                headers = risk_analysis.get('headers', [])
+                                rows = risk_analysis.get('rows', [])
+
+                                if headers and rows:
+                                    st.markdown("---")
+                                    st.markdown("**Detailed Risk Analysis:**")
+                                    risk_df = pd.DataFrame(rows, columns=headers)
+                                    st.dataframe(risk_df, use_container_width=True)
+
+                else:
+                    st.warning("No analysis data available")
+
+    # ===== COMPARISON TAB ===== (Replace the entire comparison_tab section)
+    with comparison_tab:
+        st.subheader("📈 Offer Comparison & AI Insights")
+
+        if not st.session_state.analysis_result:
+            st.info("Complete an analysis first to see the comparison summary.")
+        else:
+            comparison_data = st.session_state.analysis_result.get('comparison_summary', {})
+
+            # Handle the nested comparison_summary structure
+            if isinstance(comparison_data, str):
+                try:
+                    comparison_data = json.loads(comparison_data)
+                except json.JSONDecodeError as e:
+                    st.error(f"Error parsing comparison data: {e}")
+                    st.write("Raw comparison data:")
+                    st.code(comparison_data)
+                    comparison_data = {}
+
+            # Extract the actual comparison summary
+            if 'comparison_summary' in comparison_data:
+                comparison_summary = comparison_data['comparison_summary']
+            else:
+                comparison_summary = comparison_data
+
+            if comparison_summary and isinstance(comparison_summary, dict):
+                # Comparison Table
+                if 'comparison_table' in comparison_summary and comparison_summary['comparison_table']:
+                    st.markdown("### 📊 Side-by-Side Comparison")
+                    comparison_table = comparison_summary['comparison_table']
+
+                    try:
+                        # Create a clean dataframe from the comparison table
+                        rows = []
+
+                        # Get all possible column names from the first item
+                        if comparison_table and len(comparison_table) > 0:
+                            first_item = comparison_table[0]
+
+                            # Find all offer columns (they contain "Offer" in the key)
+                            offer_columns = [key for key in first_item.keys()
+                                        if 'Offer' in key or 'offer' in key]
+
+                            # Build column list: Criterion + Offer columns + Observation + Highlight
+                            columns = ['Criterion'] + sorted(offer_columns) + ['Observation', 'Highlight']
+
+                            # Extract data for each row
+                            for item in comparison_table:
+                                if isinstance(item, dict):
+                                    row = {'Criterion': item.get('criterion', '')}
+
+                                    # Add all offer columns
+                                    for col in offer_columns:
+                                        row[col] = item.get(col, '')
+
+                                    row['Observation'] = item.get('observation', '')
+                                    row['Highlight'] = item.get('highlight', '')
+
+                                    rows.append(row)
+
+                            if rows:
+                                comp_df = pd.DataFrame(rows)
+
+                                # Apply color highlighting based on the Highlight column
+                                def highlight_cells(row):
+                                    highlight = row['Highlight'].lower()
+                                    colors = [''] * len(row)
+
+                                    if 'green' in highlight:
+                                        for i in range(len(row)):
+                                            if i > 0 and i < len(row) - 2:  # Color offer columns
+                                                colors[i] = 'background-color: #90EE90'
+                                    elif 'yellow' in highlight:
+                                        for i in range(len(row)):
+                                            if i > 0 and i < len(row) - 2:
+                                                colors[i] = 'background-color: #FFFACD'
+                                    elif 'red' in highlight:
+                                        for i in range(len(row)):
+                                            if i > 0 and i < len(row) - 2:
+                                                colors[i] = 'background-color: #FFB6C6'
+
+                                    return colors
+
+                                # Display with styling (without Highlight column)
+                                display_df = comp_df.drop(columns=['Highlight'])
+                                st.dataframe(
+                                    display_df,
+                                    use_container_width=True,
+                                    hide_index=True
+                                )
+                            else:
+                                st.info("No comparison data available in table format.")
+                        else:
+                            st.info("Comparison table is empty.")
+
+                    except Exception as e:
+                        st.error(f"Error displaying comparison table: {e}")
+                        st.write("Raw comparison table data:")
+                        st.json(comparison_table)
+
+                else:
+                    st.info("No comparison table available in the analysis results.")
+
+                # AI Insights
+                if 'ai_insights' in comparison_summary and comparison_summary['ai_insights']:
+                    st.markdown("### 💡 AI Insights")
+                    with st.expander("View AI Analysis", expanded=True):
+                        insights = comparison_summary['ai_insights']
+                        if isinstance(insights, list):
+                            for i, insight in enumerate(insights, 1):
+                                st.markdown(f"**{i}.** {insight}")
+                                st.markdown("")
+                        elif isinstance(insights, str):
+                            st.info(insights)
+                        else:
+                            st.json(insights)
+                else:
+                    st.info("No AI insights available in the analysis results.")
+
+                # Action List
+                if 'action_list' in comparison_summary and comparison_summary['action_list']:
+                    st.markdown("### ✅ Recommended Actions")
+
+                    for i, action in enumerate(comparison_summary['action_list'], 1):
+                        if isinstance(action, dict):
+                            with st.container():
+                                col1, col2, col3, col4 = st.columns([4, 1.5, 1, 1])
+                                with col1:
+                                    st.write(f"**{i}. {action.get('action', 'N/A')}**")
+                                with col2:
+                                    st.write(f"👤 {action.get('responsible', 'N/A')}")
+                                with col3:
+                                    status = action.get('status', 'Open')
+                                    status_emoji = "🔴" if status == 'Open' else "🟡" if status == 'In Progress' else "🟢"
+                                    st.write(f"{status_emoji} {status}")
+                                with col4:
+                                    due_date = action.get('due_date', '')
+                                    if due_date:
+                                        st.caption(f"📅 {due_date}")
+                                st.markdown("---")
+                else:
+                    st.info("No recommended actions available in the analysis results.")
+            else:
+                st.warning("No comparison summary available or invalid format.")
+
+    # ===== CHAT TAB =====
+    with chat_tab:
+        st.subheader("💬 Chat with Clare AI About Your Analysis")
+
+        if not st.session_state.analysis_result:
+            st.info("Complete an analysis first, then you can ask questions about the results.")
+        else:
+            # Display chat history
+            for msg in st.session_state.chat_history:
+                role = msg['role']
+                content = msg['content']
+
+                if role == 'user':
+                    with st.chat_message("user"):
+                        st.write(content)
+                else:
+                    with st.chat_message("assistant"):
+                        st.markdown(content)
+
+            # Chat input
+            user_input = st.chat_input("Ask about the analysis...")
+
+            if user_input:
+                # Add user message
+                st.session_state.chat_history.append({
+                    'role': 'user',
+                    'content': user_input
+                })
+
+                # Get AI response
+                with st.spinner("🤖 Thinking..."):
+                    response = agent.chat(user_input)
+
+                    if 'error' not in response:
+                        assistant_msg = response.get('content', 'Sorry, I could not process that.')
+                        st.session_state.chat_history.append({
+                            'role': 'assistant',
+                            'content': assistant_msg
+                        })
+                    else:
+                        st.error(f"Chat error: {response['error']}")
+
+                st.rerun()
+
+            # Quick questions
+            st.subheader("💡 Quick Questions")
+            quick_questions = [
+                "What are the main differences between the top 2 offers?",
+                "Which offer has the best lead time?",
+                "Explain the risk analysis for each offer",
+                "What are the key action items I should focus on?",
+                "Which offer is best for long-term partnership?"
+            ]
+
+            cols = st.columns(2)
+            for i, question in enumerate(quick_questions):
+                with cols[i % 2]:
+                    if st.button(question, key=f"quick_{i}"):
+                        st.session_state.chat_history.append({
+                            'role': 'user',
+                            'content': question
+                        })
+
+                        response = agent.chat(question)
+                        if 'error' not in response:
+                            st.session_state.chat_history.append({
+                                'role': 'assistant',
+                                'content': response.get('content', '')
+                            })
+
+                        st.rerun()
+
+
+# Add this tab to your main() function's tab list:
+# Change from:
+# tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([...])
+# To:
+# tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+#     "📊 Global Dashboard", "📈 Enhanced Forecasting", "🚗 EV Adoption",
+#     "🌍 Geopolitical Risk", "💳 Procurement", "🔗 Supply Chain",
+#     "🌐 Data Sources", "🤖 AI Offer Analysis"  # NEW TAB
+# ])
+#
+# Then add:
+# with tab8:
+#     show_ai_offer_analysis()
 
 if __name__ == "__main__":
     main()
