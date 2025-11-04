@@ -2376,7 +2376,7 @@ def show_ai_offer_analysis():
                 else:
                     st.warning("No analysis data available")
 
-    # ===== COMPARISON TAB =====
+    # ===== COMPARISON TAB ===== (Replace the entire comparison_tab section)
     with comparison_tab:
         st.subheader("📈 Offer Comparison & AI Insights")
 
@@ -2384,10 +2384,6 @@ def show_ai_offer_analysis():
             st.info("Complete an analysis first to see the comparison summary.")
         else:
             comparison_data = st.session_state.analysis_result.get('comparison_summary', {})
-
-            # Debug: Show what we received
-            with st.expander("🔍 Debug - Raw Data Structure"):
-                st.json(comparison_data)
 
             # Handle the nested comparison_summary structure
             if isinstance(comparison_data, str):
@@ -2399,7 +2395,7 @@ def show_ai_offer_analysis():
                     st.code(comparison_data)
                     comparison_data = {}
 
-            # Extract the actual comparison summary (it's nested under 'comparison_summary')
+            # Extract the actual comparison summary
             if 'comparison_summary' in comparison_data:
                 comparison_summary = comparison_data['comparison_summary']
             else:
@@ -2411,31 +2407,75 @@ def show_ai_offer_analysis():
                     st.markdown("### 📊 Side-by-Side Comparison")
                     comparison_table = comparison_summary['comparison_table']
 
-                    # Convert to DataFrame for better display
                     try:
                         # Create a clean dataframe from the comparison table
                         rows = []
-                        for item in comparison_table:
-                            if isinstance(item, dict):
-                                row = {
-                                    'Criterion': item.get('criterion', ''),
-                                    'Offer 1': item.get('Offer 1', ''),
-                                    'Offer 2': item.get('Offer 2', ''),
-                                    'Offer 3': item.get('Offer 3', ''),
-                                    'Observation': item.get('observation', ''),
-                                    'Highlight': item.get('highlight', '')
-                                }
-                                rows.append(row)
 
-                        if rows:
-                            comp_df = pd.DataFrame(rows)
-                            st.dataframe(comp_df, use_container_width=True, hide_index=True)
+                        # Get all possible column names from the first item
+                        if comparison_table and len(comparison_table) > 0:
+                            first_item = comparison_table[0]
+
+                            # Find all offer columns (they contain "Offer" in the key)
+                            offer_columns = [key for key in first_item.keys()
+                                        if 'Offer' in key or 'offer' in key]
+
+                            # Build column list: Criterion + Offer columns + Observation + Highlight
+                            columns = ['Criterion'] + sorted(offer_columns) + ['Observation', 'Highlight']
+
+                            # Extract data for each row
+                            for item in comparison_table:
+                                if isinstance(item, dict):
+                                    row = {'Criterion': item.get('criterion', '')}
+
+                                    # Add all offer columns
+                                    for col in offer_columns:
+                                        row[col] = item.get(col, '')
+
+                                    row['Observation'] = item.get('observation', '')
+                                    row['Highlight'] = item.get('highlight', '')
+
+                                    rows.append(row)
+
+                            if rows:
+                                comp_df = pd.DataFrame(rows)
+
+                                # Apply color highlighting based on the Highlight column
+                                def highlight_cells(row):
+                                    highlight = row['Highlight'].lower()
+                                    colors = [''] * len(row)
+
+                                    if 'green' in highlight:
+                                        for i in range(len(row)):
+                                            if i > 0 and i < len(row) - 2:  # Color offer columns
+                                                colors[i] = 'background-color: #90EE90'
+                                    elif 'yellow' in highlight:
+                                        for i in range(len(row)):
+                                            if i > 0 and i < len(row) - 2:
+                                                colors[i] = 'background-color: #FFFACD'
+                                    elif 'red' in highlight:
+                                        for i in range(len(row)):
+                                            if i > 0 and i < len(row) - 2:
+                                                colors[i] = 'background-color: #FFB6C6'
+
+                                    return colors
+
+                                # Display with styling (without Highlight column)
+                                display_df = comp_df.drop(columns=['Highlight'])
+                                st.dataframe(
+                                    display_df,
+                                    use_container_width=True,
+                                    hide_index=True
+                                )
+                            else:
+                                st.info("No comparison data available in table format.")
                         else:
-                            st.info("No comparison data available in table format.")
+                            st.info("Comparison table is empty.")
+
                     except Exception as e:
                         st.error(f"Error displaying comparison table: {e}")
                         st.write("Raw comparison table data:")
                         st.json(comparison_table)
+
                 else:
                     st.info("No comparison table available in the analysis results.")
 
@@ -2445,8 +2485,9 @@ def show_ai_offer_analysis():
                     with st.expander("View AI Analysis", expanded=True):
                         insights = comparison_summary['ai_insights']
                         if isinstance(insights, list):
-                            for i, insight in enumerate(insights):
-                                st.write(f"• {insight}")
+                            for i, insight in enumerate(insights, 1):
+                                st.markdown(f"**{i}.** {insight}")
+                                st.markdown("")
                         elif isinstance(insights, str):
                             st.info(insights)
                         else:
@@ -2457,14 +2498,13 @@ def show_ai_offer_analysis():
                 # Action List
                 if 'action_list' in comparison_summary and comparison_summary['action_list']:
                     st.markdown("### ✅ Recommended Actions")
-                    actions = comparison_summary['action_list']
 
-                    for i, action in enumerate(actions):
+                    for i, action in enumerate(comparison_summary['action_list'], 1):
                         if isinstance(action, dict):
                             with st.container():
                                 col1, col2, col3, col4 = st.columns([4, 1.5, 1, 1])
                                 with col1:
-                                    st.write(f"**{action.get('action', 'N/A')}**")
+                                    st.write(f"**{i}. {action.get('action', 'N/A')}**")
                                 with col2:
                                     st.write(f"👤 {action.get('responsible', 'N/A')}")
                                 with col3:
@@ -2474,7 +2514,7 @@ def show_ai_offer_analysis():
                                 with col4:
                                     due_date = action.get('due_date', '')
                                     if due_date:
-                                        st.caption(f"Due: {due_date}")
+                                        st.caption(f"📅 {due_date}")
                                 st.markdown("---")
                 else:
                     st.info("No recommended actions available in the analysis results.")

@@ -17,7 +17,7 @@ mkdir -p data/raw data/processed logs cache config
 mkdir -p agent_data/runs agent_data/uploaded_files
 mkdir -p agent/tools agent/static
 
-# Create static files
+# Create static files (your existing static file creation code remains the same)
 cat > agent/static/index.html << 'EOF'
 <!DOCTYPE html>
 <html lang="en">
@@ -94,7 +94,6 @@ cat > agent/static/index.html << 'EOF'
 </html>
 EOF
 
-# Create a simple script.js
 cat > agent/static/script.js << 'EOF'
 // Basic frontend functionality
 console.log('Procurement AI Agent frontend loaded');
@@ -104,7 +103,6 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 EOF
 
-# Create a simple styles.css
 cat > agent/static/styles.css << 'EOF'
 /* Basic styles for the procurement agent frontend */
 body {
@@ -141,7 +139,7 @@ EOF
 touch agent/__init__.py
 touch agent/tools/__init__.py
 
-# Create .env file with agent API keys
+# Create .env file with agent API keys (your existing .env creation code remains)
 if [ ! -f ".env" ]; then
     cat > .env << 'EOF'
 # Application settings
@@ -163,7 +161,7 @@ EOF
     echo "    Edit .env and add your OpenAI or Gemini API key"
 fi
 
-# Create config if missing
+# Create config if missing (your existing config creation code remains)
 if [ ! -f "config/config.yaml" ]; then
     cat > config/config.yaml << 'EOF'
 paths:
@@ -198,7 +196,7 @@ agent:
 EOF
 fi
 
-# Create agent requirements with compatible versions
+# Create agent requirements (your existing requirements code remains)
 cat > agent/requirements.txt << 'EOF'
 fastapi==0.109.0
 uvicorn==0.27.0
@@ -218,7 +216,7 @@ langchain-community>=0.0.10
 requests>=2.31.0
 EOF
 
-# Create Dockerfile.agent with proper Python path
+# Create Dockerfile.agent (your existing Dockerfile code remains)
 cat > Dockerfile.agent << 'EOF'
 FROM python:3.10-slim
 
@@ -259,19 +257,24 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 EOF
 
 echo "📦 Building and starting all services..."
-docker-compose down -v --remove-orphans
-docker-compose build --no-cache
-docker-compose up -d --force-recreate
 
-# Try to pull images first to avoid build issues
+# Stop and clean up existing containers
+docker-compose down -v --remove-orphans
+#docker-compose build --no-cache
+#docker-compose up -d --force-recreate
+
+# Pull base images first to avoid build issues
 echo "📥 Pulling base images..."
 docker pull python:3.9-slim
 docker pull python:3.10-slim
 
-# Build and start services
-echo "🏗️ Building services..."
-docker-compose build --no-cache agent-api
-docker-compose up -d
+# SINGLE BUILD COMMAND - Build all services once
+echo "🏗️ Building all services (this may take a few minutes)..."
+docker-compose build --no-cache
+
+# SINGLE START COMMAND - Start all services
+echo "🚀 Starting all services..."
+docker-compose up -d --force-recreate
 
 echo "⏳ Waiting for services to be ready..."
 sleep 30
