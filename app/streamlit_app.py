@@ -2360,351 +2360,337 @@ def show_ai_offer_analysis():
                     else:
                         st.error(f"Analysis failed: {result['error']}")
 
-        # ===== MAIN CONTENT =====
-        st.header("Procurement Analysis Dashboard")
-        st.write("Results from your procurement offer analysis will be displayed here.")
+    # ===== MAIN CONTENT =====
+    st.header("Procurement Analysis Dashboard")
+    st.write("Results from your procurement offer analysis will be displayed here.")
 
-        if not st.session_state.analysis_result:
-            st.info("Upload and analyze offers to see the results.")
-            return
+    if not st.session_state.analysis_result:
+        st.info("Upload and analyze offers to see the results.")
+        return
 
-        # Create tabs for different views
-        analysis_tab, comparison_tab, chat_tab = st.tabs([
-            "📊 Analysis Results",
-            "📈 Comparison Summary",
-            "💬 AI Chat"
-        ])
+    # Create tabs for different views
+    analysis_tab, comparison_tab, chat_tab = st.tabs([
+        "📊 Analysis Results",
+        "📈 Comparison Summary",
+        "💬 AI Chat"
+    ])
 
-        # ===== ANALYSIS TAB =====
-        with analysis_tab:
-            analysis = st.session_state.analysis_result.get('analysis', [])
+    # ===== ANALYSIS TAB =====
+    with analysis_tab:
+        analysis = st.session_state.analysis_result.get('analysis', [])
 
-            if isinstance(analysis, str):
-                try:
-                    analysis = json.loads(analysis)
-                except:
-                    analysis = []
-
-            if analysis:
-                # Create cards for each offer
-                cols = st.columns(2)
-                for i, offer in enumerate(analysis):
-                    with cols[i % 2]:
-                        display_offer_card(offer, i)
-            else:
-                st.warning("No analysis data available")
-
-        # ===== COMPARISON TAB =====
-        with comparison_tab:
-            display_comparison_summary()
-
-        # ===== CHAT TAB =====
-        with chat_tab:
-            display_chat_interface()
-
-    def display_offer_card(offer, index):
-        """Display an offer card in the style of the old project"""
-
-        # Helper function to safely convert to float
-        def safe_float(value, default=0.0):
+        if isinstance(analysis, str):
             try:
-                if value is None or value == '' or value == 'N/A':
-                    return default
-                return float(value)
-            except (ValueError, TypeError):
+                analysis = json.loads(analysis)
+            except:
+                analysis = []
+
+        if analysis:
+            # Create cards for each offer
+            cols = st.columns(2)
+            for i, offer in enumerate(analysis):
+                with cols[i % 2]:
+                    display_offer_card(offer, i)
+        else:
+            st.warning("No analysis data available")
+
+    # ===== COMPARISON TAB =====
+    with comparison_tab:
+        display_comparison_summary()
+
+    # ===== CHAT TAB =====
+    with chat_tab:
+        display_chat_interface()
+
+def display_offer_card(offer, index):
+    """Display an offer card in the style of the old project"""
+
+    # Helper function to safely convert to float
+    def safe_float(value, default=0.0):
+        try:
+            if value is None or value == '' or value == 'N/A':
                 return default
+            return float(value)
+        except (ValueError, TypeError):
+            return default
 
-        offer_name = offer.get('offer_name', f'Offer {index+1}')
-        supplier_name = offer.get('supplier_name', 'Unknown Supplier')
-        recommendation = offer.get('recommendation', 'N/A')
-        score = safe_float(offer.get('total_weighted_score', 0))
+    offer_name = offer.get('offer_name', f'Offer {index+1}')
+    supplier_name = offer.get('supplier_name', 'Unknown Supplier')
+    recommendation = offer.get('recommendation', 'N/A')
+    score = safe_float(offer.get('total_weighted_score', 0))
 
-        # Determine styling based on recommendation
-        card_class = "card"
-        badge_html = ""
-        if recommendation == 'Best Offer':
-            card_class += " best-offer"
-            badge_html = '<div class="recommendation-badge">Recommended</div>'
+    # Determine styling based on recommendation
+    card_class = "card"
+    badge_html = ""
+    if recommendation == 'Best Offer':
+        card_class += " best-offer"
+        badge_html = '<div class="recommendation-badge">Recommended</div>'
 
-        rec_class = "recommendation-best" if recommendation == 'Best Offer' else "recommendation-good"
+    rec_class = "recommendation-best" if recommendation == 'Best Offer' else "recommendation-good"
 
-        # Category scores
-        category_scores_html = ""
-        category_scores = offer.get('category_scores', {})
-        if category_scores:
-            for category, score_val in category_scores.items():
-                score_float = safe_float(score_val)
-                category_scores_html += f"""
-                <div class="score-item">
-                    <span>{category}</span>
-                    <span class="score-percentage">{score_float:.1f}%</span>
-                </div>
-                """
-
-        # Summary metrics
-        summary_metrics = offer.get('summary_metrics', {})
-        price = summary_metrics.get('Total Price', 'N/A') if isinstance(summary_metrics, dict) else 'N/A'
-        lead_time = summary_metrics.get('Lead Time', 'N/A') if isinstance(summary_metrics, dict) else 'N/A'
-
-        # Create the card
-        card_html = f"""
-        <div class="{card_class}">
-            {badge_html}
-            <h3>{supplier_name}</h3>
-            <div class="{rec_class}">{recommendation}</div>
-            <div class="total-score-container">
-                <span class="total-score-label">Total Weighted Score</span>
-                <span class="total-score-value">{score:.2f}</span>
+    # Category scores
+    category_scores_html = ""
+    category_scores = offer.get('category_scores', {})
+    if category_scores:
+        for category, score_val in category_scores.items():
+            score_float = safe_float(score_val)
+            category_scores_html += f"""
+            <div class="score-item">
+                <span>{category}</span>
+                <span class="score-percentage">{score_float:.1f}%</span>
             </div>
-            <div class="category-scores">
-                {category_scores_html}
-            </div>
-            <div class="summary-metrics">
-                <p><strong>Price:</strong> {price}</p>
-                <p><strong>Lead Time:</strong> {lead_time}</p>
-            </div>
+            """
+
+    # Summary metrics
+    summary_metrics = offer.get('summary_metrics', {})
+    price = summary_metrics.get('Total Price', 'N/A') if isinstance(summary_metrics, dict) else 'N/A'
+    lead_time = summary_metrics.get('Lead Time', 'N/A') if isinstance(summary_metrics, dict) else 'N/A'
+
+    # Create the card
+    card_html = f"""
+    <div class="{card_class}">
+        {badge_html}
+        <h3>{supplier_name}</h3>
+        <div class="{rec_class}">{recommendation}</div>
+        <div class="total-score-container">
+            <span class="total-score-label">Total Weighted Score</span>
+            <span class="total-score-value">{score:.2f}</span>
         </div>
-        """
+        <div class="category-scores">
+            {category_scores_html}
+        </div>
+        <div class="summary-metrics">
+            <p><strong>Price:</strong> {price}</p>
+            <p><strong>Lead Time:</strong> {lead_time}</p>
+        </div>
+    </div>
+    """
 
-        st.markdown(card_html, unsafe_allow_html=True)
+    st.markdown(card_html, unsafe_allow_html=True)
 
-        # Details expander
-        with st.expander("View Details", key=f"details_{index}"):
-            display_offer_details(offer)
+    # Details expander
+    with st.expander("View Details", key=f"details_{index}"):
+        display_offer_details(offer)
 
-    def display_offer_details(offer):
-        """Display detailed analysis for an offer"""
+def display_offer_details(offer):
+    """Display detailed analysis for an offer"""
 
-        # Gap Analysis
-        if 'detailed_gap_analysis' in offer and offer['detailed_gap_analysis']:
-            gap_analysis = offer['detailed_gap_analysis']
-            headers = gap_analysis.get('headers', [])
-            rows = gap_analysis.get('rows', [])
+    # Gap Analysis
+    if 'detailed_gap_analysis' in offer and offer['detailed_gap_analysis']:
+        gap_analysis = offer['detailed_gap_analysis']
+        headers = gap_analysis.get('headers', [])
+        rows = gap_analysis.get('rows', [])
+
+        if headers and rows:
+            st.subheader("Gap Analysis")
+            gap_df = pd.DataFrame(rows, columns=headers)
+            st.dataframe(gap_df, use_container_width=True)
+
+    # Risk Analysis
+    risk_data = offer.get('risk', {})
+    if risk_data:
+        st.subheader("Risk Analysis")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write(f"**Overall Risk Level:** {risk_data.get('risk_level', 'N/A')}")
+            st.write(f"**Risk Score:** {risk_data.get('total_risk_score', 'N/A')}")
+
+        with col2:
+            if 'summary' in risk_data and risk_data['summary']:
+                st.write(f"**Summary:** {risk_data['summary']}")
+
+        # Dimension scores
+        dimension_scores = risk_data.get('dimension_scores', {})
+        if dimension_scores:
+            st.write("**Dimension Scores:**")
+            for dimension, score in dimension_scores.items():
+                st.write(f"• {dimension}: {score}")
+
+        # Detailed risk analysis
+        if 'detailed_risk_analysis' in risk_data and risk_data['detailed_risk_analysis']:
+            risk_analysis = risk_data['detailed_risk_analysis']
+            headers = risk_analysis.get('headers', [])
+            rows = risk_analysis.get('rows', [])
 
             if headers and rows:
-                st.subheader("Gap Analysis")
-                gap_df = pd.DataFrame(rows, columns=headers)
-                st.dataframe(gap_df, use_container_width=True)
+                st.write("**Detailed Risk Breakdown:**")
+                risk_df = pd.DataFrame(rows, columns=headers)
+                st.dataframe(risk_df, use_container_width=True)
 
-        # Risk Analysis
-        risk_data = offer.get('risk', {})
-        if risk_data:
-            st.subheader("Risk Analysis")
+def display_comparison_summary():
+    """Display comparison summary in the style of the old project"""
 
-            col1, col2 = st.columns(2)
-            with col1:
-                st.write(f"**Overall Risk Level:** {risk_data.get('risk_level', 'N/A')}")
-                st.write(f"**Risk Score:** {risk_data.get('total_risk_score', 'N/A')}")
+    if not st.session_state.analysis_result:
+        st.info("Complete an analysis first to see the comparison summary.")
+        return
 
-            with col2:
-                if 'summary' in risk_data and risk_data['summary']:
-                    st.write(f"**Summary:** {risk_data['summary']}")
+    comparison_data = st.session_state.analysis_result.get('comparison_summary', {})
 
-            # Dimension scores
-            dimension_scores = risk_data.get('dimension_scores', {})
-            if dimension_scores:
-                st.write("**Dimension Scores:**")
-                for dimension, score in dimension_scores.items():
-                    st.write(f"• {dimension}: {score}")
-
-            # Detailed risk analysis
-            if 'detailed_risk_analysis' in risk_data and risk_data['detailed_risk_analysis']:
-                risk_analysis = risk_data['detailed_risk_analysis']
-                headers = risk_analysis.get('headers', [])
-                rows = risk_analysis.get('rows', [])
-
-                if headers and rows:
-                    st.write("**Detailed Risk Breakdown:**")
-                    risk_df = pd.DataFrame(rows, columns=headers)
-                    st.dataframe(risk_df, use_container_width=True)
-
-    def display_comparison_summary():
-        """Display comparison summary in the style of the old project"""
-
-        if not st.session_state.analysis_result:
-            st.info("Complete an analysis first to see the comparison summary.")
-            return
-
-        comparison_data = st.session_state.analysis_result.get('comparison_summary', {})
-
-        # Handle nested structure
-        if isinstance(comparison_data, str):
-            try:
-                comparison_data = json.loads(comparison_data)
-            except json.JSONDecodeError:
-                comparison_data = {}
-
-        # Extract actual comparison summary
-        if 'comparison_summary' in comparison_data:
-            comparison_summary = comparison_data['comparison_summary']
-        else:
-            comparison_summary = comparison_data
-
-        if not comparison_summary or not isinstance(comparison_summary, dict):
-            st.warning("No comparison summary available.")
-            return
-
-        # Comparison Table
-        if 'comparison_table' in comparison_summary and comparison_summary['comparison_table']:
-            st.subheader("Offer Comparison Table")
-            display_comparison_table(comparison_summary['comparison_table'])
-
-        # AI Insights
-        if 'ai_insights' in comparison_summary and comparison_summary['ai_insights']:
-            st.subheader("AI Highlights & Insights")
-            with st.expander("View AI Analysis", expanded=True):
-                insights = comparison_summary['ai_insights']
-                if isinstance(insights, list):
-                    for i, insight in enumerate(insights, 1):
-                        st.markdown(f"**{i}.** {insight}")
-                elif isinstance(insights, str):
-                    st.info(insights)
-                else:
-                    st.json(insights)
-
-        # Action List
-        if 'action_list' in comparison_summary and comparison_summary['action_list']:
-            st.subheader("Action List")
-            display_action_list(comparison_summary['action_list'])
-
-    def display_comparison_table(comparison_table):
-        """Display the comparison table with styling"""
-
-        if not comparison_table:
-            st.info("No comparison table data available.")
-            return
-
+    # Handle nested structure
+    if isinstance(comparison_data, str):
         try:
-            # Create a clean dataframe
-            rows = []
-            if comparison_table and len(comparison_table) > 0:
-                first_item = comparison_table[0]
-                offer_columns = [key for key in first_item.keys() if 'Offer' in key or 'offer' in key]
-                columns = ['Criterion'] + sorted(offer_columns) + ['Observation', 'Highlight']
+            comparison_data = json.loads(comparison_data)
+        except json.JSONDecodeError:
+            comparison_data = {}
 
-                for item in comparison_table:
-                    if isinstance(item, dict):
-                        row = {'Criterion': item.get('criterion', '')}
-                        for col in offer_columns:
-                            row[col] = item.get(col, '')
-                        row['Observation'] = item.get('observation', '')
-                        row['Highlight'] = item.get('highlight', '')
-                        rows.append(row)
+    # Extract actual comparison summary
+    if 'comparison_summary' in comparison_data:
+        comparison_summary = comparison_data['comparison_summary']
+    else:
+        comparison_summary = comparison_data
 
-            if rows:
-                comp_df = pd.DataFrame(rows)
-                # Display without highlight column
-                display_df = comp_df.drop(columns=['Highlight'], errors='ignore')
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
+    if not comparison_summary or not isinstance(comparison_summary, dict):
+        st.warning("No comparison summary available.")
+        return
+
+    # Comparison Table
+    if 'comparison_table' in comparison_summary and comparison_summary['comparison_table']:
+        st.subheader("Offer Comparison Table")
+        display_comparison_table(comparison_summary['comparison_table'])
+
+    # AI Insights
+    if 'ai_insights' in comparison_summary and comparison_summary['ai_insights']:
+        st.subheader("AI Highlights & Insights")
+        with st.expander("View AI Analysis", expanded=True):
+            insights = comparison_summary['ai_insights']
+            if isinstance(insights, list):
+                for i, insight in enumerate(insights, 1):
+                    st.markdown(f"**{i}.** {insight}")
+            elif isinstance(insights, str):
+                st.info(insights)
             else:
-                st.info("No comparison data available in table format.")
+                st.json(insights)
 
-        except Exception as e:
-            st.error(f"Error displaying comparison table: {e}")
+    # Action List
+    if 'action_list' in comparison_summary and comparison_summary['action_list']:
+        st.subheader("Action List")
+        display_action_list(comparison_summary['action_list'])
 
-    def display_action_list(action_list):
-        """Display the action list in a table format"""
+def display_comparison_table(comparison_table):
+    """Display the comparison table with styling"""
 
-        if not action_list:
-            st.info("No action items generated.")
-            return
+    if not comparison_table:
+        st.info("No comparison table data available.")
+        return
 
-        action_data = []
-        for i, action in enumerate(action_list, 1):
-            if isinstance(action, dict):
-                action_data.append({
-                    'Action': action.get('action', 'N/A'),
-                    'Responsible': action.get('responsible', 'N/A'),
-                    'Status': action.get('status', 'Open'),
-                    'Due Date': action.get('due_date', '')
-                })
+    try:
+        # Create a clean dataframe
+        rows = []
+        if comparison_table and len(comparison_table) > 0:
+            first_item = comparison_table[0]
+            offer_columns = [key for key in first_item.keys() if 'Offer' in key or 'offer' in key]
+            columns = ['Criterion'] + sorted(offer_columns) + ['Observation', 'Highlight']
 
-        if action_data:
-            action_df = pd.DataFrame(action_data)
-            st.dataframe(action_df, use_container_width=True, hide_index=True)
+            for item in comparison_table:
+                if isinstance(item, dict):
+                    row = {'Criterion': item.get('criterion', '')}
+                    for col in offer_columns:
+                        row[col] = item.get(col, '')
+                    row['Observation'] = item.get('observation', '')
+                    row['Highlight'] = item.get('highlight', '')
+                    rows.append(row)
 
-    def display_chat_interface():
-        """Display the chat interface"""
+        if rows:
+            comp_df = pd.DataFrame(rows)
+            # Display without highlight column
+            display_df = comp_df.drop(columns=['Highlight'], errors='ignore')
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No comparison data available in table format.")
 
-        if not st.session_state.analysis_result:
-            st.info("Complete an analysis first, then you can ask questions about the results.")
-            return
+    except Exception as e:
+        st.error(f"Error displaying comparison table: {e}")
 
-        # Display chat history
-        for msg in st.session_state.chat_history:
-            if msg['role'] == 'user':
-                with st.chat_message("user"):
-                    st.write(msg['content'])
-            else:
-                with st.chat_message("assistant"):
-                    st.markdown(msg['content'])
+def display_action_list(action_list):
+    """Display the action list in a table format"""
 
-        # Chat input
-        user_input = st.chat_input("Ask about the analysis...")
+    if not action_list:
+        st.info("No action items generated.")
+        return
 
-        if user_input:
-            # Add user message
-            st.session_state.chat_history.append({
-                'role': 'user',
-                'content': user_input
+    action_data = []
+    for i, action in enumerate(action_list, 1):
+        if isinstance(action, dict):
+            action_data.append({
+                'Action': action.get('action', 'N/A'),
+                'Responsible': action.get('responsible', 'N/A'),
+                'Status': action.get('status', 'Open'),
+                'Due Date': action.get('due_date', '')
             })
 
-            # Get AI response
-            with st.spinner("🤖 Thinking..."):
-                response = agent.chat(user_input)
+    if action_data:
+        action_df = pd.DataFrame(action_data)
+        st.dataframe(action_df, use_container_width=True, hide_index=True)
 
+def display_chat_interface():
+    """Display the chat interface"""
+
+    if not st.session_state.analysis_result:
+        st.info("Complete an analysis first, then you can ask questions about the results.")
+        return
+
+    # Display chat history
+    for msg in st.session_state.chat_history:
+        if msg['role'] == 'user':
+            with st.chat_message("user"):
+                st.write(msg['content'])
+        else:
+            with st.chat_message("assistant"):
+                st.markdown(msg['content'])
+
+    # Chat input
+    user_input = st.chat_input("Ask about the analysis...")
+
+    if user_input:
+        # Add user message
+        st.session_state.chat_history.append({
+            'role': 'user',
+            'content': user_input
+        })
+
+        # Get AI response
+        with st.spinner("🤖 Thinking..."):
+            response = agent.chat(user_input)
+
+            if 'error' not in response:
+                assistant_msg = response.get('content', 'Sorry, I could not process that.')
+                st.session_state.chat_history.append({
+                    'role': 'assistant',
+                    'content': assistant_msg
+                })
+            else:
+                st.error(f"Chat error: {response['error']}")
+
+        st.rerun()
+
+    # Quick questions
+    st.subheader("💡 Quick Questions")
+    quick_questions = [
+        "What are the main differences between the top 2 offers?",
+        "Which offer has the best lead time?",
+        "Explain the risk analysis for each offer",
+        "What are the key action items I should focus on?",
+        "Which offer is best for long-term partnership?"
+    ]
+
+    cols = st.columns(2)
+    for i, question in enumerate(quick_questions):
+        with cols[i % 2]:
+            if st.button(question, key=f"quick_{i}"):
+                st.session_state.chat_history.append({
+                    'role': 'user',
+                    'content': question
+                })
+
+                response = agent.chat(question)
                 if 'error' not in response:
-                    assistant_msg = response.get('content', 'Sorry, I could not process that.')
                     st.session_state.chat_history.append({
                         'role': 'assistant',
-                        'content': assistant_msg
-                    })
-                else:
-                    st.error(f"Chat error: {response['error']}")
-
-            st.rerun()
-
-        # Quick questions
-        st.subheader("💡 Quick Questions")
-        quick_questions = [
-            "What are the main differences between the top 2 offers?",
-            "Which offer has the best lead time?",
-            "Explain the risk analysis for each offer",
-            "What are the key action items I should focus on?",
-            "Which offer is best for long-term partnership?"
-        ]
-
-        cols = st.columns(2)
-        for i, question in enumerate(quick_questions):
-            with cols[i % 2]:
-                if st.button(question, key=f"quick_{i}"):
-                    st.session_state.chat_history.append({
-                        'role': 'user',
-                        'content': question
+                        'content': response.get('content', '')
                     })
 
-                    response = agent.chat(question)
-                    if 'error' not in response:
-                        st.session_state.chat_history.append({
-                            'role': 'assistant',
-                            'content': response.get('content', '')
-                        })
-
-                    st.rerun()
-
-# Add this tab to your main() function's tab list:
-# Change from:
-# tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([...])
-# To:
-# tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
-#     "📊 Global Dashboard", "📈 Enhanced Forecasting", "🚗 EV Adoption",
-#     "🌍 Geopolitical Risk", "💳 Procurement", "🔗 Supply Chain",
-#     "🌐 Data Sources", "🤖 AI Offer Analysis"  # NEW TAB
-# ])
-#
-# Then add:
-# with tab8:
-#     show_ai_offer_analysis()
+                st.rerun()
 
 if __name__ == "__main__":
     main()
