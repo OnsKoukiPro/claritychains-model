@@ -12,6 +12,8 @@ services:
       - ./logs:/app/logs
       - ./cache:/app/cache
       - ./src:/app/src
+      - ./:/app
+      - ./agent:/app/agent
     environment:
       - STREAMLIT_SERVER_PORT=8501
       - STREAMLIT_SERVER_ADDRESS=0.0.0.0
