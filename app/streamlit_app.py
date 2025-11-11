@@ -419,39 +419,9 @@ def main():
     if BaselineForecaster is None:
         st.warning("⚠️ Enhanced forecasting limited - some features may not work properly")
 
-    # Data source selection - ENHANCED OPTIONS
-    st.sidebar.header("Data Sources")
-    use_real_data = st.sidebar.checkbox("Use Real API Data", value=True)
-    use_enhanced_forecasting = st.sidebar.checkbox("Use Enhanced Forecasting", value=True,
-                                                  help="Include EV adoption and geopolitical risk in forecasts")
-    refresh_data = st.sidebar.button("Refresh Data from Global APIs")  # UPDATED TEXT
-
     # Load data
-    if refresh_data or use_real_data:
-        with st.spinner("Fetching global data from APIs..."):  # UPDATED TEXT
-            prices_df, trade_df, data_source = fetch_real_data()
-    else:
+    with st.spinner("Loading global data..."):
         prices_df, trade_df, data_source = load_data()
-
-    # Display data source info - ENHANCED
-    if data_source == "real":
-        st.sidebar.success("✅ Using Global API Data")  # UPDATED
-        if not prices_df.empty and 'source' in prices_df.columns:
-            sources = prices_df['source'].unique()
-            if any('ecb' in str(s) for s in sources) or any('lme' in str(s) for s in sources):
-                st.sidebar.info("🌍 Sources: World Bank, ECB, LME, FRED, Yahoo Finance")
-            else:
-                st.sidebar.info("🇺🇸 Sources: FRED, World Bank, Yahoo Finance")
-        else:
-            st.sidebar.info("Sources: Multiple global sources")
-
-        if use_enhanced_forecasting:
-            st.sidebar.success("🎯 Enhanced Forecasting: ON")
-        else:
-            st.sidebar.info("📊 Baseline Forecasting: ON")
-    else:
-        st.sidebar.warning("📊 Using Sample Data")
-        st.sidebar.info("Enable 'Use Real API Data' for live global data")
 
     # Enhanced main tabs with global focus
     tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
@@ -465,7 +435,7 @@ def main():
         show_live_dashboard(prices_df, trade_df, data_source)
 
     with tab3:
-        show_enhanced_forecasting(prices_df, data_source, use_enhanced_forecasting)
+        show_enhanced_forecasting(prices_df, data_source)
 
     with tab4:
         show_ev_adoption_analysis()
@@ -481,7 +451,6 @@ def main():
 
     with tab8:
         show_data_sources(load_config(), prices_df, trade_df, data_source)
-
 
 def classify_data_source(source):
     """Classify data source by region and type"""
@@ -1123,7 +1092,7 @@ def show_volatility_analysis_tab(filtered_df):
     else:
         st.info("Insufficient data for volatility analysis")
 
-def show_enhanced_forecasting(prices_df, data_source, use_enhanced_forecasting=True):
+def show_enhanced_forecasting(prices_df, data_source):
     """Enhanced forecasting with fundamental adjustments"""
     st.header("🎯 Enhanced Price Forecasting")
 
@@ -1140,7 +1109,7 @@ def show_enhanced_forecasting(prices_df, data_source, use_enhanced_forecasting=T
     # Enhanced forecasting options
     col1, col2 = st.columns(2)
     with col1:
-        use_fundamentals = st.checkbox("Include Fundamental Factors", value=use_enhanced_forecasting,
+        use_fundamentals = st.checkbox("Include Fundamental Factors", value=True,
                                       help="Include EV adoption demand and geopolitical risk in forecasts")
     with col2:
         show_comparison = st.checkbox("Show Method Comparison", value=True,
@@ -2035,9 +2004,9 @@ def show_ai_offer_analysis():
     """AI-powered procurement offer analysis with sidebar layout"""
 
     # Set page configuration for better layout
-    st.set_page_config(layout="wide", page_title="Clarity Chain - Procurement Analyzer")
+    st.set_page_config(layout="wide", page_title="ClarityChain - Procurement Analyzer")
 
-    # Custom CSS to match the old project styling
+    # Enhanced Custom CSS with better title styling
     st.markdown("""
     <style>
     :root {
@@ -2050,6 +2019,48 @@ def show_ai_offer_analysis():
         --text-secondary: #8a94a6;
         --border-color: #e1e5eb;
         --shadow-color: rgba(0, 0, 0, 0.05);
+        --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --gradient-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    /* Enhanced Product Title Styles - Matching Main Platform */
+    .platform-title {
+        background: linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #feca57);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-size: 2.5rem !important;
+        font-weight: 700 !important;
+        text-align: center;
+        margin: 1rem 0 0.5rem 0 !important;
+        padding: 0.5rem;
+        font-family: "Source Sans Pro", sans-serif !important;
+        letter-spacing: -0.5px;
+    }
+
+    .platform-subtitle {
+        color: var(--text-primary);
+        font-size: 1.1rem;
+        text-align: center;
+        margin: 0 0 1.5rem 0 !important;
+        font-weight: 600;
+        font-family: "Source Sans Pro", sans-serif;
+    }
+
+    .platform-features {
+        background: linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #feca57);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: bold;
+        font-size: 1.1em;
+        text-align: center;
+        margin: 0.5rem 0 1.5rem 0 !important;
+    }
+
+    .title-container {
+        border-bottom: 2px solid var(--border-color);
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
     }
 
     .main .block-container {
@@ -2237,10 +2248,18 @@ def show_ai_offer_analysis():
 
     # ===== SIDEBAR =====
     with st.sidebar:
-        st.title("ClarityChain")
+        # Enhanced Product Title Section
+        st.markdown("""
+            <div class="title-container">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
+                    <div class="platform-title" style="font-size: 1.8rem !important;">ClarityChain</div>
+                </div>
+                <div class="platform-subtitle" style="font-size: 0.9rem !important; font-weight: 400;">AI Procurement Platform</div>
+            </div>
+            """, unsafe_allow_html=True)
 
         # Section 1: Stage Offers
-        st.header("1. Stage Offers")
+        st.header("📥 Stage Offers")
 
         st.info("Upload all documents for a single offer, then click 'Add as Offer' before uploading the next offer.")
 
@@ -2288,37 +2307,40 @@ def show_ai_offer_analysis():
                 st.rerun()
 
         # Show staged offers
-        st.subheader("Staged Offers")
+                # Show staged offers
+        st.subheader("📋 Staged Offers")
         if st.session_state.offers_staged:
             for i, offer in enumerate(st.session_state.offers_staged):
-                with st.expander(f"Offer {i+1} - {offer['count']} file(s)", expanded=False):
+                with st.expander(f"Offer {i+1} - {offer['count']} file(s)"):
                     for filename in offer['file_names']:
                         st.text(f"• {filename}")
         else:
             st.info("No offers staged yet.")
 
         # Section 2: Configure Analysis
-        st.header("2. Configure Analysis")
+        st.header("⚙️ Configure Analysis")
 
         eval_criteria = st.text_area(
             "Evaluation Criteria (Optional)",
-            placeholder="e.g., focus on long-term value...",
-            help="Provide any specific requirements or preferences"
+            placeholder="e.g., focus on long-term value, sustainability, or specific technical requirements...",
+            help="Provide any specific requirements or preferences for the AI analysis"
         )
 
         # Category Weights
-        with st.expander("Set Category Weights", expanded=False):
-            tco_weight = st.slider("TCO", 0, 100, 25, 5, key="tco")
+        with st.expander("📊 Set Category Weights", expanded=False):
+            st.caption("Adjust the importance of each evaluation category")
+            tco_weight = st.slider("TCO (Total Cost of Ownership)", 0, 100, 25, 5, key="tco")
             payment_terms_weight = st.slider("Payment Terms", 0, 100, 10, 5, key="payment_terms")
             price_stability_weight = st.slider("Price Stability", 0, 100, 5, 5, key="price_stability")
             lead_time_weight = st.slider("Lead Time", 0, 100, 20, 5, key="lead_time")
-            tech_spec_weight = st.slider("Technical Specs", 0, 100, 25, 5, key="tech_spec")
+            tech_spec_weight = st.slider("Technical Specifications", 0, 100, 25, 5, key="tech_spec")
             certifications_weight = st.slider("Certifications", 0, 100, 5, 5, key="certifications")
             incoterms_weight = st.slider("Incoterms", 0, 100, 5, 5, key="incoterms")
-            warranty_weight = st.slider("Warranty", 0, 100, 5, 5, key="warranty")
+            warranty_weight = st.slider("Warranty & Support", 0, 100, 5, 5, key="warranty")
 
         # Risk Weights
-        with st.expander("Set Risk Weights", expanded=False):
+        with st.expander("⚠️ Set Risk Weights", expanded=False):
+            st.caption("Configure risk assessment priorities")
             delivery_risk_weight = st.slider("Delivery Risk", 0, 100, 10, 5, key="delivery_risk")
             financial_risk_weight = st.slider("Financial Risk", 0, 100, 10, 5, key="financial_risk")
             technical_risk_weight = st.slider("Technical Risk", 0, 100, 10, 5, key="technical_risk")
@@ -2328,7 +2350,7 @@ def show_ai_offer_analysis():
             esg_reputation_risk_weight = st.slider("ESG / Reputation Risk", 0, 100, 10, 5, key="esg_reputation_risk")
 
         # Analyze button
-        if st.button("🚀 Analyze Offers", type="primary", use_container_width=True):
+        if st.button("🚀 Analyze Offers with AI", type="primary", use_container_width=True):
             if not st.session_state.offers_staged:
                 st.error("Please add at least one offer first.")
             else:
@@ -2360,12 +2382,16 @@ def show_ai_offer_analysis():
                     else:
                         st.error(f"Analysis failed: {result['error']}")
 
+        # Add a footer with version info
+        st.markdown("---")
+        st.caption("🔒 **ClarityChain v2.0**  \n*Secure AI-Powered Procurement*")
+
     # ===== MAIN CONTENT =====
-    st.header("Procurement Analysis Dashboard")
+    st.header("🎯 Procurement Analysis Dashboard")
     st.write("Results from your procurement offer analysis will be displayed here.")
 
     if not st.session_state.analysis_result:
-        st.info("Upload and analyze offers to see the results.")
+        st.info("📤 Upload and analyze offers to see the results.")
         return
 
     # Create tabs for different views
@@ -2400,7 +2426,7 @@ def show_ai_offer_analysis():
 
     # ===== CHAT TAB =====
     with chat_tab:
-        display_chat_interface()
+        display_chat_interface(agent)
 
 def display_offer_card(offer, index):
     """Display an offer card in the style of the old project"""
@@ -2468,8 +2494,8 @@ def display_offer_card(offer, index):
 
     st.markdown(card_html, unsafe_allow_html=True)
 
-    # Details expander
-    with st.expander("View Details", key=f"details_{index}"):
+    # Details expander - REMOVED KEY PARAMETER
+    with st.expander(f"View Details - {supplier_name}"):
         display_offer_details(offer)
 
 def display_offer_details(offer):
@@ -2552,7 +2578,8 @@ def display_comparison_summary():
     # AI Insights
     if 'ai_insights' in comparison_summary and comparison_summary['ai_insights']:
         st.subheader("AI Highlights & Insights")
-        with st.expander("View AI Analysis", expanded=True):
+        # REMOVED KEY PARAMETER
+        with st.expander("View AI Analysis"):
             insights = comparison_summary['ai_insights']
             if isinstance(insights, list):
                 for i, insight in enumerate(insights, 1):
@@ -2623,7 +2650,7 @@ def display_action_list(action_list):
         action_df = pd.DataFrame(action_data)
         st.dataframe(action_df, use_container_width=True, hide_index=True)
 
-def display_chat_interface():
+def display_chat_interface(agent):
     """Display the chat interface"""
 
     if not st.session_state.analysis_result:
