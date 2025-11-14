@@ -97,66 +97,6 @@ except ImportError as e:
                 'difference': {'mean_change_pct': 0}
             }
 
-try:
-    from data_pipeline.ev_adoption_fetcher import EVAdoptionFetcher
-except ImportError as e:
-    logger.warning(f"EVAdoptionFetcher import failed: {e}")
-    # Create fallback
-    class EVAdoptionFetcher:
-        def __init__(self, config):
-            self.config = config
-            self.material_intensity = {
-                'lithium': {'per_ev_kg': 8.0, 'growth_factor': 1.15},
-                'cobalt': {'per_ev_kg': 12.0, 'growth_factor': 1.10},
-                'nickel': {'per_ev_kg': 40.0, 'growth_factor': 1.12},
-                'copper': {'per_ev_kg': 80.0, 'growth_factor': 1.08},
-                'rare_earths': {'per_ev_kg': 1.0, 'growth_factor': 1.18}
-            }
-
-        def calculate_material_demand(self, material: str, scenario: str = 'stated_policies') -> pd.DataFrame:
-            """Fixed version that handles key errors"""
-            try:
-                if material not in self.material_intensity:
-                    return pd.DataFrame()
-
-                # Safe scenario data access
-                scenario_data = getattr(self, 'scenarios', {}).get(scenario, {})
-
-                # Use safe key access with defaults
-                start_sales = scenario_data.get('sales_2024', scenario_data.get('ev_sales_2024', 14.0)) * 1e6
-                end_sales = scenario_data.get('sales_2030', scenario_data.get('ev_sales_2030', 60.9)) * 1e6
-                annual_growth = scenario_data.get('annual_growth', 0.28)
-
-                years = list(range(2024, 2031))
-                demand_data = []
-                intensity = self.material_intensity[material]
-
-                for i, year in enumerate(years):
-                    if year == 2024:
-                        ev_sales = start_sales
-                    else:
-                        growth_years = year - 2024
-                        ev_sales = start_sales * ((1 + annual_growth) ** growth_years)
-
-                    base_demand = ev_sales * intensity['per_ev_kg'] / 1000
-                    years_from_2024 = max(0, year - 2024)
-                    growth_multiplier = intensity['growth_factor'] ** years_from_2024
-                    total_demand = base_demand * growth_multiplier
-
-                    demand_data.append({
-                        'year': year,
-                        'material': material,
-                        'ev_sales_millions': ev_sales / 1e6,
-                        'material_demand_tons': total_demand,
-                        'scenario': scenario
-                    })
-
-                return pd.DataFrame(demand_data)
-
-            except Exception as e:
-                logger.error(f"Error in calculate_material_demand: {e}")
-                return pd.DataFrame()
-
         def get_demand_forecast_adjustment(self, material):
             return {'adjustment_factor': 1.0, 'demand_growth': 0.0}
 
@@ -221,17 +161,6 @@ def load_config():
             'base_url': "https://api.gdeltproject.org/api/v2/doc/doc",
             'max_records': 250,
             'rate_limit_delay': 0.5
-        },
-        'ev_adoption': {
-            'material_intensity': {
-                'lithium': {'per_ev_kg': 8.0, 'growth_factor': 1.15},
-                'cobalt': {'per_ev_kg': 12.0, 'growth_factor': 1.10},
-                'nickel': {'per_ev_kg': 40.0, 'growth_factor': 1.12},
-                'copper': {'per_ev_kg': 80.0, 'growth_factor': 1.08},
-                'rare_earths': {'per_ev_kg': 1.0, 'growth_factor': 1.18},
-                'aluminum': {'per_ev_kg': 180.0, 'growth_factor': 1.05}  # ADDED
-            },
-            'price_elasticity': 0.3
         },
         'global_sources': {  # ADDED NEW CONFIG SECTION
             'ecb_enabled': True,
@@ -390,13 +319,13 @@ def main():
     st.set_page_config(
         page_title="Critical Materials AI Platform - Global Enhanced",
         layout="wide",
-        page_icon="🌍"  # CHANGED ICON
+        page_icon="🌍"
     )
 
-    st.title("🌍 Critical Materials AI Platform - Global Edition")  # UPDATED TITLE
-    st.markdown("**Multi-region procurement intelligence for critical minerals supply chains**")  # UPDATED
+    st.title("🌍 Critical Materials AI Platform - Global Edition")
+    st.markdown("**Multi-region procurement intelligence for critical minerals supply chains**")
 
-    # Enhanced subtitle with global features
+    # Enhanced subtitle with new features
     st.markdown("""
     <style>
     .global-features {
@@ -408,47 +337,34 @@ def main():
     }
     </style>
     <div class="global-features">
-    🌐 NEW: Global Data Sources (US, Europe, World Bank) • 🚀 Multi-Region Coverage • 📊 Enhanced Reliability
+    🌐 NEW: Intelligent Tender Management • 🤖 AI-Powered Document Creation • 📊 Real-time Tender Analytics
     </div>
     """, unsafe_allow_html=True)
-
-    # Show import status
-    if GlobalCommodityFetcher is None:
-        st.error("⚠️ GlobalCommodityFetcher not available - data sourcing limited")
-
-    if BaselineForecaster is None:
-        st.warning("⚠️ Enhanced forecasting limited - some features may not work properly")
 
     # Load data
     with st.spinner("Loading global data..."):
         prices_df, trade_df, data_source = load_data()
 
-    # Enhanced main tabs with global focus
+    # Enhanced main tabs with tender management
     tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
-        "🤖 Clare AI Offer Analysis", "📊 Global Dashboard", "📈 Enhanced Forecasting", "🚗 EV Adoption",  # UPDATED
-        "🌍 Geopolitical Risk", "💳 Procurement", "🔗 Supply Chain", "🌐 Data Sources",   # UPDATED
+        "🤖 Clare AI Offer Analysis", "📝 Tender Management", "📊 Global Dashboard", "📈 Enhanced Forecasting",
+        "🌍 Geopolitical Risk", "💳 Procurement", "🔗 Supply Chain", "🌐 Data Sources",
     ])
 
     with tab1:
         show_ai_offer_analysis()
     with tab2:
-        show_live_dashboard(prices_df, trade_df, data_source)
-
+        show_tender_management()
     with tab3:
-        show_enhanced_forecasting(prices_df, data_source)
-
+        show_live_dashboard(prices_df, trade_df, data_source)
     with tab4:
-        show_ev_adoption_analysis()
-
+        show_enhanced_forecasting(prices_df, data_source)
     with tab5:
         show_geopolitical_risk()
-
-    with tab6:
+    with tab5:
         show_procurement_analysis(prices_df)
-
     with tab7:
         show_supply_chain_analysis(trade_df)
-
     with tab8:
         show_data_sources(load_config(), prices_df, trade_df, data_source)
 
@@ -1278,107 +1194,9 @@ def show_enhanced_forecasting(prices_df, data_source):
         - **Confidence intervals** (P10/P50/P90) for risk assessment
 
         **Fundamental Factors:**
-        - 📈 EV adoption drives long-term demand
         - 🌍 Geopolitical events create supply risks
         - ⚡ Volatility regimes indicate market stability
         """)
-
-def show_ev_adoption_analysis():
-    """Enhanced EV adoption analysis tab"""
-    st.header("🚗 EV Adoption & Demand Impact")
-
-    try:
-        # Initialize fetchers
-        config = load_config()
-        ev_fetcher = EVAdoptionFetcher(config)
-
-        material = st.selectbox("Select Material",
-                               ['lithium', 'cobalt', 'nickel', 'copper', 'rare_earths'],
-                               key='ev_material')
-
-        scenario = st.radio("EV Adoption Scenario",
-                           ['conservative', 'stated_policies', 'sustainable'],
-                           horizontal=True,
-                           help="IEA Global EV Outlook scenarios")
-
-        # Show material intensity information
-        with st.expander("📊 Material Intensity Factors"):
-            if hasattr(ev_fetcher, 'material_intensity'):
-                intensity_data = []
-                for mat, specs in ev_fetcher.material_intensity.items():
-                    intensity_data.append({
-                        'Material': mat.title(),
-                        'kg per EV': specs.get('per_ev_kg', 0),
-                        'Annual Growth': f"{((specs.get('growth_factor', 1) - 1) * 100):.1f}%",
-                        'Data Source': specs.get('data_source', 'N/A')
-                    })
-                st.dataframe(pd.DataFrame(intensity_data), use_container_width=True)
-
-        if st.button("Generate EV Demand Forecast", type="primary"):
-            with st.spinner("Calculating EV-driven demand impact..."):
-                demand_data = ev_fetcher.calculate_material_demand(material, scenario)
-
-                if not demand_data.empty:
-                    # Display demand chart
-                    fig = px.line(demand_data, x='year', y='material_demand_tons',
-                                 title=f"{material.title()} Demand from EV Adoption ({scenario.replace('_', ' ').title()} Scenario)",
-                                 labels={'material_demand_tons': 'Demand (tons)', 'year': 'Year'})
-
-                    # Add scenario comparison
-                    if scenario != 'stated_policies':
-                        comp_scenario = 'stated_policies'
-                        comp_data = ev_fetcher.calculate_material_demand(material, comp_scenario)
-                        if not comp_data.empty:
-                            fig.add_scatter(x=comp_data['year'], y=comp_data['material_demand_tons'],
-                                          name=f"{comp_scenario.replace('_', ' ').title()} Scenario",
-                                          line=dict(dash='dot'))
-
-                    fig.update_layout(hovermode='x unified')
-                    st.plotly_chart(fig, use_container_width=True)
-
-                    # Show key metrics
-                    st.subheader("📈 Demand Projection Metrics")
-                    col1, col2, col3, col4 = st.columns(4)
-
-                    with col1:
-                        current_demand = demand_data[demand_data['year'] == 2024]['material_demand_tons'].iloc[0]
-                        st.metric("2024 Demand", f"{current_demand:,.0f} tons")
-
-                    with col2:
-                        future_demand = demand_data[demand_data['year'] == 2030]['material_demand_tons'].iloc[0]
-                        st.metric("2030 Projected", f"{future_demand:,.0f} tons")
-
-                    with col3:
-                        growth = ((future_demand - current_demand) / current_demand) * 100
-                        st.metric("Growth 2024-2030", f"{growth:.1f}%")
-
-                    with col4:
-                        # Calculate annualized growth rate
-                        years = 2030 - 2024
-                        cagr = ((future_demand / current_demand) ** (1/years) - 1) * 100
-                        st.metric("CAGR", f"{cagr:.1f}%")
-
-                    # Price impact analysis
-                    st.subheader("💰 Potential Price Impact")
-                    try:
-                        price_impact = ev_fetcher.get_demand_forecast_adjustment(material)
-                        adj_col1, adj_col2, adj_col3 = st.columns(3)
-
-                        with adj_col1:
-                            st.metric("Demand Growth", f"{price_impact.get('demand_growth_pct', 0):.1f}%")
-                        with adj_col2:
-                            st.metric("Price Elasticity", f"{price_impact.get('price_elasticity', 0.3):.2f}")
-                        with adj_col3:
-                            adj_factor = price_impact.get('adjustment_factor', 1.0)
-                            price_impact_pct = (adj_factor - 1) * 100
-                            st.metric("Price Impact", f"{price_impact_pct:+.1f}%")
-
-                    except Exception as e:
-                        st.info("Price impact analysis not available")
-
-    except Exception as e:
-        st.error(f"EV adoption analysis failed: {e}")
-        logger.error(f"EV adoption analysis error: {e}")
 
 def show_geopolitical_risk():
     """Geopolitical risk monitoring tab"""
@@ -1992,12 +1810,10 @@ def show_data_sources(config, prices_df, trade_df, data_source):
 
     # Show import status
     st.subheader("🔍 Module Status")
-    status_col1, status_col2, status_col3 = st.columns(3)
+    status_col1, status_col2 = st.columns(2)
     with status_col1:
         st.write(f"**BaselineForecaster:** {'✅ Available' if BaselineForecaster is not None else '❌ Not Available'}")
     with status_col2:
-        st.write(f"**EVAdoptionFetcher:** {'✅ Available' if EVAdoptionFetcher is not None else '❌ Not Available'}")
-    with status_col3:
         st.write(f"**GDELTFetcher:** {'✅ Available' if GDELTFetcher is not None else '❌ Not Available'}")
 
 def show_ai_offer_analysis():
@@ -2248,15 +2064,32 @@ def show_ai_offer_analysis():
 
     # ===== SIDEBAR =====
     with st.sidebar:
-        # Enhanced Product Title Section
-        st.markdown("""
-            <div class="title-container">
-                <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
-                    <div class="platform-title" style="font-size: 1.8rem !important;">ClarityChain</div>
-                </div>
-                <div class="platform-subtitle" style="font-size: 0.9rem !important; font-weight: 400;">AI Procurement Platform</div>
+        # Fixed sidebar styling
+        st.markdown(
+            """
+            <div style='text-align: center; margin-bottom: 1.5rem;'>
+                <h1 style="
+                    font-size: 3.2rem;
+                    font-weight: 800;
+                    color: #31333F;
+                    margin: 0.5rem 0 0.25rem 0;
+                    text-align: center;
+                ">
+                    ClarityChain
+                </h1>
+                <p style="
+                    font-size: 1.1rem;
+                    font-weight: 600;
+                    color: #666;
+                    margin: 0 0 1rem 0;
+                    text-align: center;
+                ">
+                    AI Procurement Platform
+                </p>
             </div>
-            """, unsafe_allow_html=True)
+            """,
+            unsafe_allow_html=True
+        )
 
         # Section 1: Stage Offers
         st.header("📥 Stage Offers")
@@ -2409,9 +2242,11 @@ def show_ai_offer_analysis():
             try:
                 analysis = json.loads(analysis)
             except:
+                st.error("Could not parse analysis data as JSON")
                 analysis = []
 
         if analysis:
+            st.write(f"Found {len(analysis)} offers to display")
             # Create cards for each offer
             cols = st.columns(2)
             for i, offer in enumerate(analysis):
@@ -2429,7 +2264,7 @@ def show_ai_offer_analysis():
         display_chat_interface(agent)
 
 def display_offer_card(offer, index):
-    """Display an offer card in the style of the old project"""
+    """Display an offer card using complete HTML structure"""
 
     # Helper function to safely convert to float
     def safe_float(value, default=0.0):
@@ -2440,61 +2275,33 @@ def display_offer_card(offer, index):
         except (ValueError, TypeError):
             return default
 
-    offer_name = offer.get('offer_name', f'Offer {index+1}')
     supplier_name = offer.get('supplier_name', 'Unknown Supplier')
     recommendation = offer.get('recommendation', 'N/A')
     score = safe_float(offer.get('total_weighted_score', 0))
-
-    # Determine styling based on recommendation
-    card_class = "card"
-    badge_html = ""
-    if recommendation == 'Best Offer':
-        card_class += " best-offer"
-        badge_html = '<div class="recommendation-badge">Recommended</div>'
-
-    rec_class = "recommendation-best" if recommendation == 'Best Offer' else "recommendation-good"
-
-    # Category scores
-    category_scores_html = ""
-    category_scores = offer.get('category_scores', {})
-    if category_scores:
-        for category, score_val in category_scores.items():
-            score_float = safe_float(score_val)
-            category_scores_html += f"""
-            <div class="score-item">
-                <span>{category}</span>
-                <span class="score-percentage">{score_float:.1f}%</span>
-            </div>
-            """
 
     # Summary metrics
     summary_metrics = offer.get('summary_metrics', {})
     price = summary_metrics.get('Total Price', 'N/A') if isinstance(summary_metrics, dict) else 'N/A'
     lead_time = summary_metrics.get('Lead Time', 'N/A') if isinstance(summary_metrics, dict) else 'N/A'
 
-    # Create the card
-    card_html = f"""
-    <div class="{card_class}">
-        {badge_html}
-        <h3>{supplier_name}</h3>
-        <div class="{rec_class}">{recommendation}</div>
-        <div class="total-score-container">
-            <span class="total-score-label">Total Weighted Score</span>
-            <span class="total-score-value">{score:.2f}</span>
-        </div>
-        <div class="category-scores">
-            {category_scores_html}
-        </div>
-        <div class="summary-metrics">
-            <p><strong>Price:</strong> {price}</p>
-            <p><strong>Lead Time:</strong> {lead_time}</p>
-        </div>
-    </div>
-    """
+    # Build category scores HTML
+    category_scores_html = ""
+    category_scores = offer.get('category_scores', {})
+    if category_scores:
+        for category, score_val in category_scores.items():
+            score_float = safe_float(score_val)
+            category_scores_html += f'<div class="score-item"><span>{category}</span><span class="score-percentage">{score_float:.1f}%</span></div>'
 
+    # Create complete HTML card
+    if recommendation == 'Best Offer':
+        card_html = f'<div class="card best-offer"><div class="recommendation-badge">Recommended</div><h3>{supplier_name}</h3><div class="recommendation-best">Best Offer</div><div class="total-score-container"><span class="total-score-label">Total Weighted Score</span><span class="total-score-value">{score:.2f}</span></div><div class="category-scores">{category_scores_html}</div><div class="summary-metrics"><p><strong>Price:</strong> {price}</p><p><strong>Lead Time:</strong> {lead_time}</p></div></div>'
+    else:
+        card_html = f'<div class="card"><h3>{supplier_name}</h3><div class="recommendation-good">{recommendation}</div><div class="total-score-container"><span class="total-score-label">Total Weighted Score</span><span class="total-score-value">{score:.2f}</span></div><div class="category-scores">{category_scores_html}</div><div class="summary-metrics"><p><strong>Price:</strong> {price}</p><p><strong>Lead Time:</strong> {lead_time}</p></div></div>'
+
+    # Display the complete card
     st.markdown(card_html, unsafe_allow_html=True)
 
-    # Details expander - REMOVED KEY PARAMETER
+    # Details expander
     with st.expander(f"View Details - {supplier_name}"):
         display_offer_details(offer)
 
@@ -2718,6 +2525,757 @@ def display_chat_interface(agent):
                     })
 
                 st.rerun()
+
+import uuid
+from datetime import datetime, timedelta
+import json
+
+def show_tender_management():
+    """Intelligent Tender Management System with AI-powered document creation"""
+
+    st.header("📝 Intelligent Tender Management")
+
+    # Initialize session state for tender management
+    if 'tenders' not in st.session_state:
+        st.session_state.tenders = []
+    if 'current_tender' not in st.session_state:
+        st.session_state.current_tender = None
+    if 'conversation_history' not in st.session_state:
+        st.session_state.conversation_history = []
+
+    # Main tabs for tender management
+    tender_tab1, tender_tab2, tender_tab3 = st.tabs([
+        "🏠 Tender Dashboard",
+        "🔄 Create New Tender",
+        "📊 Tender Analysis"
+    ])
+
+    with tender_tab1:
+        show_tender_dashboard()
+
+    with tender_tab2:
+        show_tender_creation()
+
+    with tender_tab3:
+        show_tender_analysis()
+
+def show_tender_dashboard():
+    """Dashboard showing all RFQs and their status"""
+
+    st.subheader("📊 Tender Dashboard")
+
+    # Quick stats
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        total_tenders = len(st.session_state.tenders)
+        st.metric("Total Tenders", total_tenders)
+
+    with col2:
+        active_tenders = len([t for t in st.session_state.tenders if t.get('status') == 'Active'])
+        st.metric("Active Tenders", active_tenders)
+
+    with col3:
+        draft_tenders = len([t for t in st.session_state.tenders if t.get('status') == 'Draft'])
+        st.metric("Draft Tenders", draft_tenders)
+
+    with col4:
+        completed_tenders = len([t for t in st.session_state.tenders if t.get('status') == 'Completed'])
+        st.metric("Completed Tenders", completed_tenders)
+
+    # Tender list with status
+    st.subheader("📋 All Tenders")
+
+    if not st.session_state.tenders:
+        st.info("No tenders created yet. Start by creating your first tender!")
+        return
+
+    # Create a dataframe for better display
+    tender_data = []
+    for tender in st.session_state.tenders:
+        tender_data.append({
+            'ID': tender.get('id', 'N/A'),
+            'Title': tender.get('title', 'Untitled'),
+            'Status': tender.get('status', 'Draft'),
+            'Category': tender.get('category', 'General'),
+            'Created': tender.get('created_date', 'N/A'),
+            'Suppliers': len(tender.get('suppliers', [])),
+            'Value': f"${tender.get('estimated_value', 0):,}",
+            'Deadline': tender.get('submission_deadline', 'N/A')
+        })
+
+    if tender_data:
+        df = pd.DataFrame(tender_data)
+        st.dataframe(df, use_container_width=True)
+
+    # Quick actions
+    st.subheader("🚀 Quick Actions")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        if st.button("➕ Create New Tender", use_container_width=True):
+            st.session_state.current_tender = None
+            st.rerun()
+
+    with col2:
+        if st.button("📊 Generate Report", use_container_width=True):
+            generate_tender_report()
+
+    with col3:
+        if st.button("🔄 Refresh Data", use_container_width=True):
+            st.rerun()
+
+def show_tender_creation():
+    """AI-powered tender document creation with conversational interface"""
+
+    st.subheader("🔄 Create Intelligent Tender")
+
+    # Initialize new tender if none exists
+    if st.session_state.current_tender is None:
+        st.session_state.current_tender = {
+            'id': str(uuid.uuid4())[:8],
+            'title': '',
+            'status': 'Draft',
+            'category': 'General',
+            'created_date': datetime.now().strftime("%Y-%m-%d"),
+            'conversation_history': [],
+            'document_sections': {},
+            'suppliers': [],
+            'requirements': {},
+            'timeline': {},
+            'evaluation_criteria': {}
+        }
+        st.session_state.conversation_history = []
+
+    # Two-column layout: Conversation and Document
+    col1, col2 = st.columns([1, 1])
+
+    with col1:
+        show_tender_conversation()
+
+    with col2:
+        show_tender_document_editor()
+
+def show_tender_conversation():
+    """Conversational AI interface for building tender documents"""
+
+    st.subheader("💬 AI Assistant")
+    st.markdown("*Ask me to help build your tender document*")
+
+    # Display conversation history
+    for msg in st.session_state.conversation_history:
+        if msg['role'] == 'user':
+            with st.chat_message("user"):
+                st.write(msg['content'])
+        else:
+            with st.chat_message("assistant"):
+                st.markdown(msg['content'])
+
+    # Quick questions for the AI
+    st.markdown("**💡 Quick Questions to Get Started:**")
+    quick_questions = [
+        "Help me create a tender for electrical equipment",
+        "What sections should I include in a construction tender?",
+        "Define evaluation criteria for supplier selection",
+        "Create a timeline for a 3-month procurement process"
+    ]
+
+    for i, question in enumerate(quick_questions):
+        if st.button(question, key=f"quick_q_{i}", use_container_width=True):
+            st.session_state.conversation_history.append({
+                'role': 'user',
+                'content': question,
+                'timestamp': datetime.now().isoformat()
+            })
+            process_ai_response(question)
+            st.rerun()
+
+    # User input
+    user_input = st.chat_input("Ask about tender creation...")
+
+    if user_input:
+        # Add user message
+        st.session_state.conversation_history.append({
+            'role': 'user',
+            'content': user_input,
+            'timestamp': datetime.now().isoformat()
+        })
+
+        # Process AI response
+        process_ai_response(user_input)
+        st.rerun()
+
+def process_ai_response(user_input):
+    """Process user input and generate AI response that updates the tender document"""
+
+    # Simple rule-based responses (in production, this would use your AI agent)
+    user_input_lower = user_input.lower()
+
+    if any(word in user_input_lower for word in ['electrical', 'equipment', 'cables', 'transformers']):
+        response = """
+        **I'll help you create an electrical equipment tender!** 🔌
+
+        I've started structuring your tender with these key sections:
+
+        ✅ **Technical Specifications**
+        - Voltage ratings and standards compliance
+        - Safety certifications required
+        - Performance metrics
+        - Installation requirements
+
+        ✅ **Commercial Terms**
+        - Payment milestones
+        - Warranty periods (suggested: 24 months)
+        - Delivery terms (INCOTERMS 2020)
+
+        ✅ **Evaluation Criteria**
+        - Technical compliance: 40%
+        - Price: 35%
+        - Delivery timeline: 15%
+        - Past experience: 10%
+
+        Would you like me to add any specific electrical standards or modify these sections?
+        """
+
+        # Update tender document structure
+        update_tender_from_ai('electrical_equipment')
+
+    elif any(word in user_input_lower for word in ['construction', 'building', 'contractor']):
+        response = """
+        **Building a construction tender!** 🏗️
+
+        Here's a comprehensive structure for your construction tender:
+
+        ✅ **Project Scope & Specifications**
+        - Detailed work breakdown structure
+        - Materials specifications
+        - Quality standards
+        - Safety requirements
+
+        ✅ **Timeline & Milestones**
+        - Project phases with deadlines
+        - Critical path items
+        - Progress reporting requirements
+
+        ✅ **Commercial Proposal**
+        - Fixed price vs. cost-plus options
+        - Payment schedule tied to milestones
+        - Variation management process
+
+        ✅ **Compliance & Certifications**
+        - Building code compliance
+        - Environmental regulations
+        - Safety certifications
+
+        Shall I focus on any specific type of construction project?
+        """
+        update_tender_from_ai('construction')
+
+    elif any(word in user_input_lower for word in ['criteria', 'evaluation', 'scoring']):
+        response = """
+        **Setting up evaluation criteria!** 📊
+
+        Here's a balanced evaluation framework:
+
+        **Weighting Structure:**
+        - **Technical Compliance (40%)**: Meets all specifications
+        - **Price Competitiveness (30%)**: Total cost of ownership
+        - **Delivery & Timeline (15%)**: Lead time and reliability
+        - **Supplier Experience (10%)**: Past performance and references
+        - **Sustainability (5%)**: ESG compliance and green initiatives
+
+        **Scoring Method:**
+        - 5-point scale for qualitative factors
+        - Price scoring: (Lowest Price / Supplier Price) × Points
+        - Minimum threshold: 70% for technical compliance
+
+        Would you like to adjust these weightings or add specific technical criteria?
+        """
+        update_tender_from_ai('evaluation_criteria')
+
+    elif any(word in user_input_lower for word in ['timeline', 'schedule', 'deadline']):
+        response = """
+        **Creating project timeline!** 📅
+
+        Suggested 3-month procurement timeline:
+
+        **Phase 1: Preparation (Week 1-2)**
+        - Finalize specifications
+        - Prepare tender documents
+        - Identify potential suppliers
+
+        **Phase 2: Bidding (Week 3-6)**
+        - Issue tender (Week 3)
+        - Supplier questions (Week 4)
+        - Site visits (Week 5)
+        - Bid submission (End of Week 6)
+
+        **Phase 3: Evaluation (Week 7-8)**
+        - Technical evaluation
+        - Commercial assessment
+        - Supplier interviews
+
+        **Phase 4: Award & Mobilization (Week 9-12)**
+        - Contract award
+        - Supplier onboarding
+        - Project kickoff
+
+        Should I adjust this timeline or add specific milestones?
+        """
+        update_tender_from_ai('timeline')
+
+    else:
+        response = """
+        **I'm here to help you build a comprehensive tender document!** 📝
+
+        I can assist with:
+        - **Document Structure**: Creating well-organized tender sections
+        - **Technical Specifications**: Defining detailed requirements
+        - **Commercial Terms**: Setting payment and delivery terms
+        - **Evaluation Criteria**: Establishing fair scoring methods
+        - **Timeline Planning**: Creating realistic project schedules
+
+        Tell me what you're procuring or ask specific questions about any tender component!
+        """
+
+    # Add AI response to history
+    st.session_state.conversation_history.append({
+        'role': 'assistant',
+        'content': response,
+        'timestamp': datetime.now().isoformat()
+    })
+
+def update_tender_from_ai(tender_type):
+    """Update tender document based on AI conversation"""
+
+    if tender_type == 'electrical_equipment':
+        st.session_state.current_tender.update({
+            'category': 'Electrical Equipment',
+            'document_sections': {
+                'technical_specs': {
+                    'title': 'Technical Specifications',
+                    'content': 'Voltage ratings, safety certifications, performance metrics, installation requirements',
+                    'status': 'Draft'
+                },
+                'commercial_terms': {
+                    'title': 'Commercial Terms',
+                    'content': 'Payment milestones, warranty periods, delivery terms (INCOTERMS 2020)',
+                    'status': 'Draft'
+                },
+                'evaluation_criteria': {
+                    'title': 'Evaluation Criteria',
+                    'content': 'Technical compliance (40%), Price (35%), Delivery (15%), Past experience (10%)',
+                    'status': 'Draft'
+                }
+            },
+            'evaluation_criteria': {
+                'technical_compliance': 40,
+                'price': 35,
+                'delivery': 15,
+                'experience': 10
+            }
+        })
+
+    elif tender_type == 'construction':
+        st.session_state.current_tender.update({
+            'category': 'Construction',
+            'document_sections': {
+                'project_scope': {
+                    'title': 'Project Scope & Specifications',
+                    'content': 'Detailed work breakdown, materials specs, quality standards, safety requirements',
+                    'status': 'Draft'
+                },
+                'timeline': {
+                    'title': 'Timeline & Milestones',
+                    'content': 'Project phases, critical path, progress reporting',
+                    'status': 'Draft'
+                },
+                'commercial': {
+                    'title': 'Commercial Proposal',
+                    'content': 'Pricing options, payment schedule, variation management',
+                    'status': 'Draft'
+                }
+            }
+        })
+
+    elif tender_type == 'evaluation_criteria':
+        st.session_state.current_tender.update({
+            'evaluation_criteria': {
+                'technical_compliance': 40,
+                'price': 30,
+                'delivery': 15,
+                'experience': 10,
+                'sustainability': 5
+            }
+        })
+
+    elif tender_type == 'timeline':
+        st.session_state.current_tender.update({
+            'timeline': {
+                'preparation': 'Week 1-2',
+                'bidding': 'Week 3-6',
+                'evaluation': 'Week 7-8',
+                'award': 'Week 9-12'
+            }
+        })
+
+def show_tender_document_editor():
+    """Interactive tender document editor with Notion-like blocks"""
+
+    st.subheader("📄 Tender Document Editor")
+
+    if not st.session_state.current_tender:
+        st.info("Start a conversation with the AI to begin building your tender document.")
+        return
+
+    # Tender metadata
+    col1, col2 = st.columns(2)
+
+    with col1:
+        title = st.text_input(
+            "Tender Title",
+            value=st.session_state.current_tender.get('title', ''),
+            placeholder="e.g., Electrical Equipment Supply for Project X"
+        )
+        st.session_state.current_tender['title'] = title
+
+    with col2:
+        category = st.selectbox(
+            "Category",
+            options=['General', 'Electrical Equipment', 'Construction', 'IT Services', 'Raw Materials', 'Professional Services'],
+            index=['General', 'Electrical Equipment', 'Construction', 'IT Services', 'Raw Materials', 'Professional Services'].index(
+                st.session_state.current_tender.get('category', 'General')
+            )
+        )
+        st.session_state.current_tender['category'] = category
+
+    # Document sections - editable blocks
+    st.subheader("📑 Document Sections")
+
+    sections = st.session_state.current_tender.get('document_sections', {})
+
+    if not sections:
+        st.info("No sections created yet. Ask the AI to help structure your tender document.")
+    else:
+        for section_key, section_data in sections.items():
+            with st.expander(f"📝 {section_data.get('title', 'Untitled')}", expanded=True):
+                # Editable content
+                content = st.text_area(
+                    f"Content for {section_data.get('title', 'Untitled')}",
+                    value=section_data.get('content', ''),
+                    height=150,
+                    key=f"content_{section_key}"
+                )
+                sections[section_key]['content'] = content
+
+                # Status
+                status = st.selectbox(
+                    "Status",
+                    options=['Draft', 'In Review', 'Finalized'],
+                    index=['Draft', 'In Review', 'Finalized'].index(sections[section_key].get('status', 'Draft')),
+                    key=f"status_{section_key}"
+                )
+                sections[section_key]['status'] = status
+
+    # Add new section
+    st.markdown("---")
+    st.subheader("➕ Add New Section")
+
+    col1, col2 = st.columns([3, 1])
+
+    with col1:
+        new_section_title = st.text_input("Section Title", placeholder="e.g., Quality Assurance Requirements")
+
+    with col2:
+        if st.button("Add Section", use_container_width=True) and new_section_title:
+            new_key = f"section_{len(sections) + 1}"
+            sections[new_key] = {
+                'title': new_section_title,
+                'content': '',
+                'status': 'Draft'
+            }
+            st.session_state.current_tender['document_sections'] = sections
+            st.rerun()
+
+    # Evaluation criteria
+    st.subheader("📊 Evaluation Criteria")
+
+    criteria = st.session_state.current_tender.get('evaluation_criteria', {})
+
+    if criteria:
+        total_weight = sum(criteria.values())
+        if total_weight != 100:
+            st.warning(f"Total weight is {total_weight}% - should be 100%")
+
+        for criterion, weight in criteria.items():
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.text_input(
+                    f"Criterion",
+                    value=criterion.replace('_', ' ').title(),
+                    key=f"label_{criterion}",
+                    disabled=True
+                )
+            with col2:
+                new_weight = st.number_input(
+                    "Weight %",
+                    min_value=0,
+                    max_value=100,
+                    value=weight,
+                    key=f"weight_{criterion}"
+                )
+                criteria[criterion] = new_weight
+    else:
+        st.info("No evaluation criteria set. Ask the AI to suggest evaluation criteria.")
+
+    # Save and actions
+    st.markdown("---")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        if st.button("💾 Save Tender", use_container_width=True, type="primary"):
+            save_tender()
+
+    with col2:
+        if st.button("📤 Publish Tender", use_container_width=True):
+            publish_tender()
+
+    with col3:
+        if st.button("🔄 Reset", use_container_width=True):
+            st.session_state.current_tender = None
+            st.rerun()
+
+def save_tender():
+    """Save the current tender to the tenders list"""
+
+    if st.session_state.current_tender:
+        # Check if this is a new tender or updating existing
+        existing_index = None
+        for i, tender in enumerate(st.session_state.tenders):
+            if tender.get('id') == st.session_state.current_tender.get('id'):
+                existing_index = i
+                break
+
+        if existing_index is not None:
+            # Update existing
+            st.session_state.tenders[existing_index] = st.session_state.current_tender
+        else:
+            # Add new
+            st.session_state.tenders.append(st.session_state.current_tender)
+
+        st.success("✅ Tender saved successfully!")
+
+def publish_tender():
+    """Publish the tender and change status to Active"""
+
+    if st.session_state.current_tender:
+        st.session_state.current_tender['status'] = 'Active'
+        st.session_state.current_tender['published_date'] = datetime.now().strftime("%Y-%m-%d")
+        save_tender()
+        st.success("🎉 Tender published successfully! It's now active and visible to suppliers.")
+
+def show_tender_analysis():
+    """Analysis of tender performance and supplier responses"""
+
+    st.subheader("📊 Tender Analysis & History")
+
+    if not st.session_state.tenders:
+        st.info("No tenders available for analysis. Create some tenders first!")
+        return
+
+    # Filter tenders for analysis
+    tender_options = {f"{t['id']} - {t['title']}": t for t in st.session_state.tenders}
+    selected_tender_key = st.selectbox(
+        "Select Tender for Analysis",
+        options=list(tender_options.keys())
+    )
+
+    selected_tender = tender_options[selected_tender_key]
+
+    # Analysis dashboard for selected tender
+    st.subheader(f"Analysis: {selected_tender['title']}")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric("Status", selected_tender.get('status', 'Draft'))
+
+    with col2:
+        suppliers_count = len(selected_tender.get('suppliers', []))
+        st.metric("Suppliers", suppliers_count)
+
+    with col3:
+        submissions = len([s for s in selected_tender.get('suppliers', []) if s.get('submitted', False)])
+        st.metric("Submissions", submissions)
+
+    with col4:
+        if selected_tender.get('estimated_value'):
+            st.metric("Estimated Value", f"${selected_tender['estimated_value']:,}")
+
+    # Visualizations
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Status breakdown
+        if selected_tender.get('document_sections'):
+            section_statuses = [s.get('status', 'Draft') for s in selected_tender['document_sections'].values()]
+            status_counts = {status: section_statuses.count(status) for status in set(section_statuses)}
+
+            if status_counts:
+                fig = px.pie(
+                    values=list(status_counts.values()),
+                    names=list(status_counts.keys()),
+                    title="Document Section Status"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        # Timeline visualization
+        if selected_tender.get('timeline'):
+            timeline_data = []
+            for phase, timeframe in selected_tender['timeline'].items():
+                timeline_data.append({
+                    'Phase': phase.replace('_', ' ').title(),
+                    'Timeframe': timeframe
+                })
+
+            if timeline_data:
+                df_timeline = pd.DataFrame(timeline_data)
+                st.dataframe(df_timeline, use_container_width=True)
+
+    # Supplier responses analysis
+    st.subheader("🏭 Supplier Responses")
+
+    suppliers = selected_tender.get('suppliers', [])
+    if suppliers:
+        supplier_data = []
+        for supplier in suppliers:
+            supplier_data.append({
+                'Supplier': supplier.get('name', 'Unknown'),
+                'Status': 'Submitted' if supplier.get('submitted') else 'Invited',
+                'Submission Date': supplier.get('submission_date', 'N/A'),
+                'Score': supplier.get('score', 'N/A')
+            })
+
+        df_suppliers = pd.DataFrame(supplier_data)
+        st.dataframe(df_suppliers, use_container_width=True)
+
+        # Add mock supplier responses for demonstration
+        if st.button("🔄 Generate Mock Supplier Responses"):
+            generate_mock_supplier_responses(selected_tender)
+            st.rerun()
+    else:
+        st.info("No suppliers added yet. Add suppliers to track responses.")
+
+        # Quick add mock suppliers
+        if st.button("➕ Add Sample Suppliers"):
+            add_sample_suppliers(selected_tender)
+            st.rerun()
+
+def generate_mock_supplier_responses(tender):
+    """Generate mock supplier responses for demonstration"""
+
+    suppliers = tender.get('suppliers', [])
+    for supplier in suppliers:
+        if not supplier.get('submitted'):
+            # Randomly decide if this supplier submits
+            import random
+            if random.random() > 0.3:  # 70% chance to submit
+                supplier['submitted'] = True
+                supplier['submission_date'] = datetime.now().strftime("%Y-%m-%d")
+                supplier['score'] = round(random.uniform(60, 95), 1)
+
+    # Update the tender
+    for i, t in enumerate(st.session_state.tenders):
+        if t['id'] == tender['id']:
+            st.session_state.tenders[i] = tender
+            break
+
+def add_sample_suppliers(tender):
+    """Add sample suppliers to a tender"""
+
+    sample_suppliers = [
+        {'name': 'Global Equipment Corp', 'contact': 'procurement@globalcorp.com', 'submitted': False},
+        {'name': 'Tech Solutions Ltd', 'contact': 'bids@techsolutions.com', 'submitted': False},
+        {'name': 'Premium Supplies Inc', 'contact': 'tenders@premiumsupplies.com', 'submitted': False},
+        {'name': 'Reliable Partners Co', 'contact': 'quotes@reliablepartners.com', 'submitted': False}
+    ]
+
+    tender['suppliers'] = sample_suppliers
+
+    # Update the tender
+    for i, t in enumerate(st.session_state.tenders):
+        if t['id'] == tender['id']:
+            st.session_state.tenders[i] = tender
+            break
+
+def generate_tender_report():
+    """Generate comprehensive tender report"""
+
+    st.success("📈 Generating tender performance report...")
+
+    if not st.session_state.tenders:
+        st.warning("No tenders available for reporting.")
+        return
+
+    # Create summary statistics
+    total_tenders = len(st.session_state.tenders)
+    status_counts = {}
+    category_counts = {}
+    total_value = 0
+
+    for tender in st.session_state.tenders:
+        status = tender.get('status', 'Draft')
+        status_counts[status] = status_counts.get(status, 0) + 1
+
+        category = tender.get('category', 'General')
+        category_counts[category] = category_counts.get(category, 0) + 1
+
+        if tender.get('estimated_value'):
+            total_value += tender['estimated_value']
+
+    # Display report
+    st.subheader("📊 Tender Management Report")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("Total Tenders", total_tenders)
+        st.metric("Total Estimated Value", f"${total_value:,}")
+
+    with col2:
+        st.write("**Status Distribution:**")
+        for status, count in status_counts.items():
+            st.write(f"- {status}: {count}")
+
+    with col3:
+        st.write("**Category Distribution:**")
+        for category, count in category_counts.items():
+            st.write(f"- {category}: {count}")
+
+    # Performance metrics
+    st.subheader("📈 Performance Metrics")
+
+    # Calculate average timeline (mock data)
+    avg_preparation_time = "2 weeks"
+    avg_evaluation_time = "3 weeks"
+    completion_rate = "75%"
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Avg Preparation Time", avg_preparation_time)
+    with col2:
+        st.metric("Avg Evaluation Time", avg_evaluation_time)
+    with col3:
+        st.metric("Completion Rate", completion_rate)
+
+    # Export option
+    st.download_button(
+        label="📥 Download Report as PDF",
+        data="Mock PDF content - in production, this would generate an actual PDF",
+        file_name=f"tender_report_{datetime.now().strftime('%Y%m%d')}.pdf",
+        mime="application/pdf"
+    )
 
 if __name__ == "__main__":
     main()
