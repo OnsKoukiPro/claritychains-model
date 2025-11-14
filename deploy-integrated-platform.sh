@@ -8,17 +8,19 @@ if ! docker version > /dev/null 2>&1; then
     exit 1
 fi
 
-# Clean up any invalid files
+# Clean up any invalid files (but don't overwrite your custom files)
 echo "🧹 Cleaning up invalid files..."
 rm -f agent/__init__  # Remove the invalid file without .py extension
 
-# Create directories
+# Create directories (only if they don't exist)
 mkdir -p data/raw data/processed logs cache config
 mkdir -p agent_data/runs agent_data/uploaded_files
 mkdir -p agent/tools agent/static
 
-# Create static files (your existing static file creation code remains the same)
-cat > agent/static/index.html << 'EOF'
+# ONLY create static files if they don't exist or are empty
+if [ ! -f "agent/static/index.html" ] || [ ! -s "agent/static/index.html" ]; then
+    echo "📄 Creating default static files..."
+    cat > agent/static/index.html << 'EOF'
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -26,120 +28,60 @@ cat > agent/static/index.html << 'EOF'
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Procurement AI Agent</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #333;
-            text-align: center;
-        }
-        .status {
-            padding: 10px;
-            border-radius: 4px;
-            margin: 10px 0;
-        }
-        .status.healthy {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        .endpoints {
-            margin-top: 20px;
-        }
-        .endpoint {
-            background: #f8f9fa;
-            padding: 10px;
-            margin: 5px 0;
-            border-left: 4px solid #007bff;
-        }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; text-align: center; }
+        .status { padding: 10px; border-radius: 4px; margin: 10px 0; }
+        .status.healthy { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .endpoints { margin-top: 20px; }
+        .endpoint { background: #f8f9fa; padding: 10px; margin: 5px 0; border-left: 4px solid #007bff; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🤖 Procurement AI Agent API</h1>
-        <div class="status healthy">
-            ✅ Service is running and healthy
-        </div>
+        <div class="status healthy">✅ Service is running and healthy</div>
         <div class="endpoints">
             <h3>Available Endpoints:</h3>
-            <div class="endpoint">
-                <strong>POST /api/add-offer</strong> - Upload procurement documents
-            </div>
-            <div class="endpoint">
-                <strong>POST /api/analyze</strong> - Analyze uploaded offers
-            </div>
-            <div class="endpoint">
-                <strong>POST /api/chat</strong> - Chat about analysis results
-            </div>
-            <div class="endpoint">
-                <strong>GET /health</strong> - Health check
-            </div>
+            <div class="endpoint"><strong>POST /api/add-offer</strong> - Upload procurement documents</div>
+            <div class="endpoint"><strong>POST /api/analyze</strong> - Analyze uploaded offers</div>
+            <div class="endpoint"><strong>POST /api/chat</strong> - Chat about analysis results</div>
+            <div class="endpoint"><strong>GET /health</strong> - Health check</div>
         </div>
-        <div style="margin-top: 20px;">
-            <p>Visit <a href="/docs">/docs</a> for API documentation</p>
-        </div>
+        <div style="margin-top: 20px;"><p>Visit <a href="/docs">/docs</a> for API documentation</p></div>
     </div>
 </body>
 </html>
 EOF
+else
+    echo "📄 Using existing index.html (preserving customizations)"
+fi
 
-cat > agent/static/script.js << 'EOF'
+# Similar checks for other static files...
+if [ ! -f "agent/static/script.js" ]; then
+    cat > agent/static/script.js << 'EOF'
 // Basic frontend functionality
 console.log('Procurement AI Agent frontend loaded');
-
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Document ready');
-});
+document.addEventListener('DOMContentLoaded', function() { console.log('Document ready'); });
 EOF
+fi
 
-cat > agent/static/styles.css << 'EOF'
+if [ ! -f "agent/static/styles.css" ]; then
+    cat > agent/static/styles.css << 'EOF'
 /* Basic styles for the procurement agent frontend */
-body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    line-height: 1.6;
-    color: #333;
-}
-
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 20px;
-}
-
-.header {
-    text-align: center;
-    margin-bottom: 30px;
-}
-
-.health-status {
-    padding: 15px;
-    border-radius: 5px;
-    margin: 20px 0;
-}
-
-.health-status.healthy {
-    background-color: #e8f5e8;
-    border: 1px solid #4caf50;
-    color: #2e7d32;
-}
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; }
+.container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+.header { text-align: center; margin-bottom: 30px; }
+.health-status { padding: 15px; border-radius: 5px; margin: 20px 0; }
+.health-status.healthy { background-color: #e8f5e8; border: 1px solid #4caf50; color: #2e7d32; }
 EOF
+fi
 
 # Ensure proper __init__.py files exist
 touch agent/__init__.py
 touch agent/tools/__init__.py
 
-# Create .env file with agent API keys (your existing .env creation code remains)
+# Create .env file only if it doesn't exist
 if [ ! -f ".env" ]; then
     cat > .env << 'EOF'
 # Application settings
@@ -158,11 +100,13 @@ GEMINI_API_KEY=your_gemini_key_here
 AGENT_API_URL=http://localhost:8000
 EOF
     echo "⚠️  Created .env file - PLEASE ADD YOUR API KEYS!"
-    echo "    Edit .env and add your OpenAI or Gemini API key"
+else
+    echo "⚙️  Using existing .env file"
 fi
 
-# Create config if missing (your existing config creation code remains)
+# Create config only if missing
 if [ ! -f "config/config.yaml" ]; then
+    mkdir -p config
     cat > config/config.yaml << 'EOF'
 paths:
   data_dir: "./data"
@@ -196,8 +140,9 @@ agent:
 EOF
 fi
 
-# Create agent requirements (your existing requirements code remains)
-cat > agent/requirements.txt << 'EOF'
+# Create agent requirements only if missing
+if [ ! -f "agent/requirements.txt" ]; then
+    cat > agent/requirements.txt << 'EOF'
 fastapi==0.109.0
 uvicorn==0.27.0
 python-multipart==0.0.6
@@ -215,9 +160,11 @@ unstructured>=0.10.30
 langchain-community>=0.0.10
 requests>=2.31.0
 EOF
+fi
 
-# Create Dockerfile.agent (your existing Dockerfile code remains)
-cat > Dockerfile.agent << 'EOF'
+# Create Dockerfile.agent only if missing
+if [ ! -f "Dockerfile.agent" ]; then
+    cat > Dockerfile.agent << 'EOF'
 FROM python:3.10-slim
 
 WORKDIR /app
@@ -255,25 +202,23 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 EOF
+fi
 
 echo "📦 Building and starting all services..."
 
 # Stop and clean up existing containers
+echo "🧹 Cleaning up existing containers..."
 docker-compose down -v --remove-orphans
-#docker-compose build --no-cache
-#docker-compose up -d --force-recreate
 
-# Pull base images first to avoid build issues
-echo "📥 Pulling base images..."
-docker pull python:3.9-slim
-docker pull python:3.10-slim
+# Remove specific images to force rebuild
+echo "🗑️  Removing old images..."
+docker rmi -f $(docker images "critical-materials-*" -q) 2>/dev/null || true
 
-# SINGLE BUILD COMMAND - Build all services once
-echo "🏗️ Building all services (this may take a few minutes)..."
+# Build fresh images
+echo "🏗️  Building fresh images..."
 docker-compose build --no-cache
 
-# SINGLE START COMMAND - Start all services
-echo "🚀 Starting all services..."
+echo "🚀 Starting services..."
 docker-compose up -d --force-recreate
 
 echo "⏳ Waiting for services to be ready..."
@@ -303,12 +248,11 @@ echo "📊 Services available:"
 echo "   - Main Dashboard: http://localhost:8501"
 echo "   - AI Agent API: http://localhost:8000"
 echo "   - API Docs: http://localhost:8000/docs"
-echo "   - Jupyter (optional): http://localhost:8888"
 echo ""
-echo "🎯 Next steps:"
-echo "   1. Check that API keys are configured in .env"
-echo "   2. Visit http://localhost:8501 for the main dashboard"
-echo "   3. Go to 'AI Offer Analysis' tab to use procurement agent"
+echo "🎯 Your changes should now be reflected in the application!"
+echo "   If you still don't see changes, check:"
+echo "   1. Your main app file is in the correct location"
+echo "   2. The docker-compose.yml mounts your current directory"
 echo ""
 echo "📋 View logs with:"
 echo "   docker-compose logs -f critical-materials-app"
