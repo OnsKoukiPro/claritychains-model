@@ -1826,63 +1826,26 @@ def show_ai_offer_analysis():
     st.markdown("""
     <style>
     :root {
-        --primary-color: #4a69ff;
-        --primary-hover-color: #3b55cc;
-        --background-color: #f7f8fc;
+        --primary-color: #2783DE;
+        --primary-hover-color: #1a6bc4;
+        --background-color: #f8f9fa;
         --sidebar-bg: #ffffff;
         --card-bg: #ffffff;
-        --text-primary: #2c3e50;
-        --text-secondary: #8a94a6;
-        --border-color: #e1e5eb;
-        --shadow-color: rgba(0, 0, 0, 0.05);
-        --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        --gradient-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        --text-primary: #1a1a1a;
+        --text-secondary: #666666;
+        --border-color: #e0e0e0;
+        --shadow-color: rgba(0, 0, 0, 0.08);
+        --success-color: #00b894;
+        --warning-color: #fdcb6e;
+        --info-color: #74b9ff;
     }
 
-    /* Enhanced Product Title Styles - Matching Main Platform */
-    .platform-title {
-        background: linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #feca57);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        font-size: 2.5rem !important;
-        font-weight: 700 !important;
-        text-align: center;
-        margin: 1rem 0 0.5rem 0 !important;
-        padding: 0.5rem;
-        font-family: "Source Sans Pro", sans-serif !important;
-        letter-spacing: -0.5px;
-    }
-
-    .platform-subtitle {
-        color: var(--text-primary);
-        font-size: 1.1rem;
-        text-align: center;
-        margin: 0 0 1.5rem 0 !important;
-        font-weight: 600;
-        font-family: "Source Sans Pro", sans-serif;
-    }
-
-    .platform-features {
-        background: linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #feca57);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-weight: bold;
-        font-size: 1.1em;
-        text-align: center;
-        margin: 0.5rem 0 1.5rem 0 !important;
-    }
-
-    .title-container {
-        border-bottom: 2px solid var(--border-color);
-        margin-bottom: 1.5rem;
-        padding-bottom: 1rem;
-    }
-
+    /* Reset and base styles */
     .main .block-container {
-        padding-top: 2rem;
+        padding-top: 1.5rem;
         padding-left: 1rem;
         padding-right: 1rem;
+        max-width: 1200px;
     }
 
     .sidebar .sidebar-content {
@@ -1890,99 +1853,129 @@ def show_ai_offer_analysis():
         border-right: 1px solid var(--border-color);
     }
 
-    .stButton button {
-        width: 100%;
-        padding: 12px;
-        border: none;
-        border-radius: 8px;
-        font-size: 16px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background-color 0.2s ease;
+    /* Minimalist Title Styles - Notion Inspired */
+    .platform-title {
+        color: var(--text-primary);
+        font-size: 2.25rem !important;
+        font-weight: 700 !important;
+        text-align: center;
+        margin: 0.5rem 0 0.25rem 0 !important;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif !important;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
     }
 
-    .stButton button:first-child {
-        background-color: var(--primary-color);
-        color: white;
+    .platform-subtitle {
+        color: var(--text-secondary);
+        font-size: 1rem;
+        text-align: center;
+        margin: 0 0 1.5rem 0 !important;
+        font-weight: 400;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+        line-height: 1.5;
     }
 
-    .stButton button:first-child:hover {
-        background-color: var(--primary-hover-color);
+    .platform-features {
+        color: var(--text-secondary);
+        font-weight: 500;
+        font-size: 0.95rem;
+        text-align: center;
+        margin: 0.5rem 0 1.5rem 0 !important;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
     }
 
+    .title-container {
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+        border-bottom: none;
+    }
+
+    /* Clean Card Design - Airtable Inspired */
     .card {
         background: var(--card-bg);
         border: 1px solid var(--border-color);
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 4px 12px var(--shadow-color);
-        margin-bottom: 20px;
+        border-radius: 8px;
+        padding: 1.5rem;
+        box-shadow: 0 1px 3px var(--shadow-color);
+        margin-bottom: 1rem;
+        transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+
+    .card:hover {
+        box-shadow: 0 2px 8px var(--shadow-color);
+        border-color: var(--primary-color);
     }
 
     .best-offer {
-        border-color: #28a745;
+        border: 2px solid var(--success-color);
         position: relative;
+        background: linear-gradient(135deg, #f8fffe 0%, #f0fff4 100%);
     }
 
+    /* Subtle Recommendation Badges */
     .recommendation-badge {
         position: absolute;
-        top: -10px;
-        right: -10px;
-        background-color: #28a745;
+        top: -12px;
+        right: 16px;
+        background-color: var(--success-color);
         color: white;
-        padding: 5px 10px;
-        font-size: 12px;
+        padding: 4px 12px;
+        font-size: 0.75rem;
         font-weight: 600;
-        border-radius: 5px;
-        transform: rotate(10deg);
+        border-radius: 12px;
+        letter-spacing: 0.02em;
     }
 
     .recommendation-best {
-        background-color: #d4edda;
-        color: #155724;
-        padding: 4px 12px;
-        border-radius: 16px;
-        font-size: 12px;
+        background-color: rgba(0, 184, 148, 0.1);
+        color: var(--success-color);
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 0.75rem;
         font-weight: 600;
         display: inline-block;
-        margin: 5px 0;
+        margin: 4px 0;
+        border: 1px solid rgba(0, 184, 148, 0.2);
     }
 
     .recommendation-good {
-        background-color: #fff3cd;
-        color: #856404;
-        padding: 4px 12px;
-        border-radius: 16px;
-        font-size: 12px;
+        background-color: rgba(253, 203, 110, 0.1);
+        color: #e17055;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 0.75rem;
         font-weight: 600;
         display: inline-block;
-        margin: 5px 0;
+        margin: 4px 0;
+        border: 1px solid rgba(253, 203, 110, 0.2);
     }
 
+    /* Clean Score Containers */
     .total-score-container {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 10px 0;
-        margin: 10px 0;
+        padding: 1rem 0;
+        margin: 1rem 0;
         border-top: 1px solid var(--border-color);
         border-bottom: 1px solid var(--border-color);
     }
 
     .total-score-label {
         font-weight: 600;
-        font-size: 16px;
+        font-size: 0.95rem;
+        color: var(--text-primary);
     }
 
     .total-score-value {
         font-weight: 700;
-        font-size: 20px;
+        font-size: 1.25rem;
         color: var(--primary-color);
     }
 
     .category-scores {
-        padding: 15px 0;
-        margin: 15px 0;
+        padding: 1rem 0;
+        margin: 1rem 0;
         border-top: 1px solid var(--border-color);
         border-bottom: 1px solid var(--border-color);
     }
@@ -1991,48 +1984,110 @@ def show_ai_offer_analysis():
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 8px;
-        font-size: 14px;
+        margin-bottom: 0.5rem;
+        font-size: 0.875rem;
+        padding: 0.25rem 0;
     }
 
+    /* Modern Buttons - Updated with #2783DE, rounder corners, and bolder text */
+    .stButton button {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        border: 1px solid var(--border-color);
+        border-radius: 12px; /* More rounded corners */
+        font-size: 0.875rem;
+        font-weight: 600; /* Bolder text */
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background-color: var(--card-bg);
+        color: var(--text-primary);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+        letter-spacing: 0.01em;
+    }
+
+    .stButton button:first-child {
+        background-color: #2783DE; /* Your specified blue */
+        color: white;
+        border-color: #2783DE;
+        font-weight: 700; /* Even bolder for primary button */
+    }
+
+    .stButton button:first-child:hover {
+        background-color: #1a6bc4;
+        border-color: #1a6bc4;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(39, 131, 222, 0.3);
+    }
+
+    .stButton button:not(:first-child):hover {
+        background-color: var(--background-color);
+        border-color: #2783DE;
+        transform: translateY(-1px);
+    }
+
+    /* Clean Table Design */
     .comparison-table {
         width: 100%;
         border-collapse: collapse;
-        margin-top: 15px;
+        margin-top: 1rem;
         background-color: var(--card-bg);
-        box-shadow: 0 2px 8px var(--shadow-color);
-        border-radius: 8px;
+        box-shadow: 0 1px 3px var(--shadow-color);
+        border-radius: 6px;
         overflow: hidden;
+        font-size: 0.875rem;
     }
 
     .comparison-table th, .comparison-table td {
-        padding: 12px 15px;
+        padding: 0.75rem 1rem;
         border: 1px solid var(--border-color);
         text-align: left;
     }
 
     .comparison-table thead th {
-        background-color: var(--primary-color);
-        color: white;
+        background-color: var(--background-color);
+        color: var(--text-primary);
         font-weight: 600;
+        border-bottom: 2px solid var(--border-color);
     }
 
+    /* Subtle Highlight Colors */
     .highlight-green {
-        background-color: #d4edda;
-        color: #155724;
-        font-weight: 600;
+        background-color: rgba(0, 184, 148, 0.08);
+        color: var(--success-color);
+        font-weight: 500;
     }
 
     .highlight-yellow {
-        background-color: #fff3cd;
-        color: #856404;
-        font-weight: 600;
+        background-color: rgba(253, 203, 110, 0.08);
+        color: #e17055;
+        font-weight: 500;
     }
 
     .highlight-red {
-        background-color: #f8d7da;
-        color: #721c24;
-        font-weight: 600;
+        background-color: rgba(255, 118, 117, 0.08);
+        color: #d63031;
+        font-weight: 500;
+    }
+
+    /* Additional Notion-style elements */
+    .score-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .card:last-child {
+        margin-bottom: 0;
+    }
+
+    /* Focus states for accessibility */
+    .stButton button:focus {
+        outline: 2px solid #2783DE;
+        outline-offset: 2px;
+    }
+
+    /* Enhanced button active states */
+    .stButton button:active {
+        transform: translateY(0);
+        transition: transform 0.1s ease;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -2659,7 +2714,7 @@ def show_tender_creation():
 def show_tender_conversation():
     """Conversational AI interface for building tender documents"""
 
-    st.subheader("💬 AI Assistant")
+    st.subheader("💬 Clare AI Assistant")
     st.markdown("*Ask me to help build your tender document*")
 
     # Display conversation history
